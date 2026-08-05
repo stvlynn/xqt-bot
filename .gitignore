@@ -1,0 +1,21 @@
+# Go
+*.test
+*.out
+/build/
+
+# Node / wrangler
+node_modules/
+.wrangler/
+.dev.vars
+
+# Env & secrets — never commit
+.env
+*.local
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Local workspace (agent notes)
+.workspace/

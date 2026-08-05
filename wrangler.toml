@@ -1,0 +1,29 @@
+# Cloudflare Workers
+name = "xqt-bot"
+main = "./build/worker.mjs"
+compatibility_date = "2025-08-01"
+workers_dev = true
+
+[build]
+command = "npm run build"
+
+# Scheduled tasks: sweep expired captchas, run due per-chat tasks
+# (auto summary, zombie cleanup). Keep this cadence; task-level
+# intervals are stored in KV and evaluated inside the cron handler.
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[kv_namespaces]]
+binding = "KV"
+# Real namespace ids are filled in by `make kv-setup` / provisioning step.
+# Use `wrangler kv namespace create KV` and paste the ids here.
+id = "dd8f5e757c2d4c03b85247c416e32cf6"
+preview_id = "e01a6dc9963848a481b454edb21a96d7"
+
+[vars]
+# Non-secret runtime configuration. Secrets (TELEGRAM_BOT_TOKEN,
+# TELEGRAM_WEBHOOK_SECRET, LLM_API_KEY) are managed via `wrangler secret`.
+LLM_BASE_URL = "https://api.openai.com/v1"
+LLM_MODEL = "gpt-4o-mini"
+ENVIRONMENT = "production"
+BOT_USERNAME = "xqtttbot"
