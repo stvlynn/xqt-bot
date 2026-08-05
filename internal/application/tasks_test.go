@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ type runnerFixture struct {
 	activity *fakeActivityRepo
 	tg       *fakeTelegram
 	llm      *fakeLLM
+	wl       *fakeWordList
 }
 
 func setupRunner() *runnerFixture {
@@ -30,6 +32,7 @@ func setupRunner() *runnerFixture {
 	activity := newFakeActivityRepo()
 	tg := newFakeTelegram()
 	llm := &fakeLLM{available: true, summaryText: "auto summary"}
+	wl := newFakeWordList()
 
 	sum := NewSummaryService(repo, msglog, tasks, tg, llm)
 	sum.now = fixedClock
@@ -37,9 +40,11 @@ func setupRunner() *runnerFixture {
 	zom.now = fixedClock
 	capSvc := NewCaptchaService(repo, captchas, tg, &fakeRenderer{}, nil)
 	capSvc.now = fixedClock
+	mod := NewModerationService(repo, tasks, tg, wl)
+	mod.now = fixedClock
 
 	return &runnerFixture{
-		runner:   NewTaskRunner(tasks, sum, zom, capSvc, tg, repo),
+		runner:   NewTaskRunner(tasks, sum, zom, capSvc, mod, tg, repo),
 		repo:     repo,
 		msglog:   msglog,
 		tasks:    tasks,
@@ -47,6 +52,7 @@ func setupRunner() *runnerFixture {
 		activity: activity,
 		tg:       tg,
 		llm:      llm,
+		wl:       wl,
 	}
 }
 
@@ -177,5 +183,64 @@ func TestRunnerSkipsFutureTasks(t *testing.T) {
 	list, _ := f.tasks.List(ctx)
 	if !list[0].NextRunAt.Equal(fixedNow.Add(time.Hour)) {
 		t.Fatalf("non-due task must not be rescheduled, got %v", list[0].NextRunAt)
+	}
+}
+
+func TestRunnerFilterRefresh(t *testing.T) {
+	f := setupRunner()
+	ctx := context.Background()
+	st := chat.Default(-1, "")
+	st.Filter.Sources = []string{"https://x/list.txt"}
+	f.repo.seed(st)
+	f.wl.rules["https://x/list.txt"] = wordRules("https://x/list.txt", "spam", "scam")
+	_ = f.tasks.Save(ctx, schedule.Task{
+		Kind:          schedule.KindFilterRefresh,
+		ChatID:        -1,
+		IntervalHours: 24,
+		NextRunAt:     fixedNow.Add(-time.Minute), // due
+	})
+
+	report, err := f.runner.Run(ctx, fixedNow)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.Errors) != 0 {
+		t.Fatalf("unexpected errors: %+v", report.Errors)
+	}
+	got, _ := f.repo.Get(ctx, -1)
+	if len(got.Filter.Rules) != 2 {
+		t.Fatalf("want 2 imported rules, got %+v", got.Filter.Rules)
+	}
+	list, _ := f.tasks.List(ctx)
+	if len(list) != 1 || !list[0].NextRunAt.Equal(fixedNow.Add(24*time.Hour)) {
+		t.Fatalf("want rescheduled task, got %+v", list)
+	}
+}
+
+func TestRunnerFilterRefreshFailureStillReschedules(t *testing.T) {
+	f := setupRunner()
+	ctx := context.Background()
+	st := chat.Default(-1, "")
+	st.Filter.Sources = []string{"https://x/list.txt"}
+	f.repo.seed(st)
+	f.wl.errs["https://x/list.txt"] = errors.New("boom")
+	_ = f.tasks.Save(ctx, schedule.Task{
+		Kind:          schedule.KindFilterRefresh,
+		ChatID:        -1,
+		IntervalHours: 24,
+		NextRunAt:     fixedNow.Add(-time.Minute),
+	})
+
+	report, err := f.runner.Run(ctx, fixedNow)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// The failed source is recorded inside RefreshResult, not as a sweep error.
+	if len(report.Errors) != 0 {
+		t.Fatalf("unexpected errors: %+v", report.Errors)
+	}
+	list, _ := f.tasks.List(ctx)
+	if !list[0].NextRunAt.After(fixedNow) {
+		t.Fatalf("failing task must still be rescheduled")
 	}
 }

@@ -17,7 +17,7 @@ type Settings struct {
     ChatID    int64
     Title     string
     Captcha   CaptchaConfig   // enabled, mode (button|image), timeout
-    Filter    FilterConfig    // enabled, []moderation.FilterRule, mute minutes
+    Filter    FilterConfig    // enabled, []moderation.FilterRule, mute minutes, imported source URLs
     AutoReact AutoReactConfig // []reaction.Rule, LLM toggle
     Summary   SummaryConfig   // auto toggle, interval hours, max messages
     Welcome   WelcomeConfig   // text with {name}/{chat} placeholders
@@ -27,19 +27,24 @@ type Settings struct {
 ```
 
 `chat.Default(chatID, title)` defines out-of-the-box behavior: safe things on
-(filter enabled with the built-in rules, delete + 10-minute mute), disruptive
-things off (captcha, auto-summary, welcome, LLM reactions). The KV repository
-materializes `Default` on first contact with a chat.
+(filter enabled with an empty rule list — word lists are imported per chat via
+`/filter import` — delete + 10-minute mute), disruptive things off (captcha,
+auto-summary, welcome, LLM reactions). The KV repository materializes
+`Default` on first contact with a chat.
 
 ### `moderation`
 
-- `FilterRule{Kind, Pattern}` — `word` (case-insensitive substring) or
-  `regex` (RE2). Constructors `NewWordRule` / `NewRegexRule` validate eagerly
-  (reject empty words and uncompilable patterns at write time).
-  `MatchAny(rules, text)` returns the first hit.
-- `BuiltinRules()` — the built-in ad/scam library (Chinese spam words,
-  `t.me/joinchat` links, phone-number harvesting regexes) seeded into every
-  new chat's settings.
+- `FilterRule{Kind, Pattern, Source}` — `word` (case-insensitive substring) or
+  `regex` (RE2). `Source` is empty for rules added by hand and holds the
+  word-list URL for imported rules. Constructors `NewWordRule` /
+  `NewRegexRule` validate eagerly (reject empty words and uncompilable
+  patterns at write time). `MatchAny(rules, text)` returns the first hit.
+- `ParseWordList(body, source)` — parses a remote word-list document: one
+  rule per line, `#` comments and blank lines ignored, `/pattern/` lines are
+  regexes, everything else is a word. Invalid regexes and duplicate
+  (kind, pattern) pairs are skipped and counted. There is no built-in word
+  list in code; the default list lives in `wordlist/default.txt` and is
+  fetched over HTTP.
 - `Challenge` / `Session` — the join captcha. `NewChallenge(rng)` builds a
   language-neutral arithmetic question with shuffled near-miss options;
   `Session` adds chat/user/message IDs and `ExpiresAt`, with `Expired(now)`
@@ -60,8 +65,8 @@ materializes `Default` on first contact with a chat.
   oldest-first buffer (`Append` evicts the oldest past capacity;
   `Since(t)` filters by time).
 - `schedule.Task{Kind, ChatID, IntervalHours, NextRunAt}` — recurring task
-  with `Due(now)` and `Rescheduled(now)`; kinds are `auto_summary` and
-  `zombie_clean`.
+  with `Due(now)` and `Rescheduled(now)`; kinds are `auto_summary`,
+  `zombie_clean` and `filter_refresh` (daily word-list re-import).
 - `invite` — deep-link payload codec: `EncodePayload(chatID)` → `j-100…`,
   `ParsePayload` back.
 
@@ -76,7 +81,8 @@ infrastructure implements them:
 - Gateways: `TelegramGateway` (send/edit/delete messages, inline keyboards
   via `ports.Button`, invite links, restrict/ban, reactions, admin checks),
   `LLMGateway` (`Available`, `Summarize`, `PickReaction`), `ImageRenderer`
-  (`RenderCaptcha` → PNG).
+  (`RenderCaptcha` → PNG), `WordListGateway` (`Fetch(url)` → parsed filter
+  rules tagged with the source URL).
 - `ports.ErrNotFound` is the single "missing entity" signal repositories
   return and services translate.
 

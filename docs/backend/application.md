@@ -12,7 +12,7 @@ One service per feature area, all constructed in `setup()` (`main.go`):
 |---------|-----------|
 | `CaptchaService` | member join → issue challenge, solve answer, bind/delete the captcha message, `SweepExpired` (kick no-shows) |
 | `SettingsService` | read settings, toggle captcha/welcome, set captcha mode, set welcome text |
-| `ModerationService` | filter rule add/remove, toggle filter, `CheckMessage` (delete + mute on hit), `Kick`/`Ban`/`Mute`/`Unmute` |
+| `ModerationService` | filter rule add/remove, remote word-list import (`ImportWordList`, replaces rules of the same source, skips duplicates, 5000-rule cap, first import schedules `filter_refresh`) and refresh (`RefreshWordLists` / `RefreshAllWordLists`), toggle filter, `CheckMessage` (delete + mute on hit), `Kick`/`Ban`/`Mute`/`Unmute` |
 | `InviteService` | `CreateShareLink` (`t.me/<bot>?start=j<chatID>`), `HandleStart` (resolve deep link → one-time invite URL) |
 | `ReactionService` | auto-react rule management, LLM toggle, `OnMessage` (rule match → `SetReaction`, else LLM pick when enabled) |
 | `SummaryService` | `RecordMessage` into the ring, `SummarizeNow`, `SetAutoSummary` (writes a `task:auto_summary:` entry) |
@@ -26,9 +26,9 @@ Plus two coordinators:
   auto-reaction (skipped when moderation hit). A failing step is aggregated
   via `errors.Join` and never blocks the remaining steps.
 - **`TaskRunner`** (`tasks.go`) — one cron sweep: sweep expired captchas,
-  list all tasks, run due ones (`auto_summary`, `zombie_clean`), reschedule
-  each executed task. Per-task failures land in `RunReport.Errors` and never
-  abort the sweep.
+  list all tasks, run due ones (`auto_summary`, `zombie_clean`,
+  `filter_refresh`), reschedule each executed task. Per-task failures land in
+  `RunReport.Errors` and never abort the sweep.
 
 ## Rules
 

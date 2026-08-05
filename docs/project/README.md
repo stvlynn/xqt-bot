@@ -11,8 +11,9 @@ deployed on Cloudflare Workers (webhook + Cron Trigger), state in Cloudflare KV.
 ## What the bot does
 
 - One-time, expiring invite links handed out through `/start` deep links.
-- Group moderation: built-in ad/scam word library + custom word/regex rules,
-  join captcha (button or image), reply-to-moderate `/kick` `/ban` `/mute`.
+- Group moderation: remotely imported word lists (`/filter import`, refreshed
+  daily) + custom word/regex rules, join captcha (button or image),
+  reply-to-moderate `/kick` `/ban` `/mute`.
 - Chat summaries through any OpenAI-compatible LLM (`/summary`, optional
   recurring auto-summary).
 - Scheduled tasks driven by a 5-minute Cron Trigger: auto summaries, zombie

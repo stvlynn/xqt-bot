@@ -26,7 +26,7 @@ func setupPipeline() *pipelineFixture {
 	tg := newFakeTelegram()
 	llm := &fakeLLM{}
 
-	mod := NewModerationService(repo, tg)
+	mod := NewModerationService(repo, tasks, tg, newFakeWordList())
 	mod.now = fixedClock
 	react := NewReactionService(repo, tg, llm)
 	react.now = fixedClock

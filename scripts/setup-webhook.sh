@@ -33,7 +33,7 @@ curl -fsS -X POST "${API}/setMyCommands" \
       {"command": "help",      "description": "查看使用说明"},
       {"command": "xqt",       "description": "打开群管理面板"},
       {"command": "invite",    "description": "生成拉人链接（一次性、限时）"},
-      {"command": "filter",    "description": "敏感词管理：/filter add|del [词或/正则/]"},
+      {"command": "filter",    "description": "敏感词：add/del 管理，import 导入远程词库"},
       {"command": "captcha",   "description": "进群验证：/captcha on|off|button|image"},
       {"command": "kick",      "description": "回复消息使用：踢出该成员"},
       {"command": "ban",       "description": "回复消息使用：封禁该成员"},

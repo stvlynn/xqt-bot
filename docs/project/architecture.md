@@ -41,7 +41,7 @@ once in `setup()` in `main.go`, which runs on both compile targets.
 | `internal/domain/moderation` | filter rules, captcha challenge/session |
 | `internal/domain/reaction` | auto-reaction rules, emoji whitelist |
 | `internal/domain/summary` | recorded message + bounded ring buffer |
-| `internal/domain/schedule` | recurring task model (`auto_summary`, `zombie_clean`) |
+| `internal/domain/schedule` | recurring task model (`auto_summary`, `zombie_clean`, `filter_refresh`) |
 | `internal/domain/invite` | deep-link payload encoding (`j<chatID>`) |
 | `internal/domain/ports` | repository + gateway interfaces, `ErrNotFound` |
 | `internal/application` | Captcha, Settings, Moderation, Invite, Reaction, Summary, Zombie, Fun services, `GroupMessagePipeline`, `TaskRunner` |
@@ -49,6 +49,7 @@ once in `setup()` in `main.go`, which runs on both compile targets.
 | `internal/infrastructure/telegram` | `ports.TelegramGateway` via `go-telegram/bot` |
 | `internal/infrastructure/llm` | `ports.LLMGateway` via any OpenAI-compatible endpoint |
 | `internal/infrastructure/image` | captcha PNG renderer (`golang.org/x/image`) |
+| `internal/infrastructure/wordlist` | `ports.WordListGateway` — remote filter-list fetch + parse |
 | `internal/infrastructure/config` | env loading (per-platform) |
 | `internal/interfaces/bot` | update routing, command parsing, keyboards, all user-facing copy (`texts.go`) |
 | `internal/interfaces/http` | `POST /webhook`, `GET /healthz`, `GET /` |
@@ -82,8 +83,9 @@ stored in KV, so the 5-minute tick is just the sweep granularity:
 2. `internal/interfaces/cron.RunOnce` calls `application.TaskRunner.Run`.
 3. The runner sweeps expired captcha sessions (`captcha:` prefix, kicking
    members who never solved the challenge), then lists every `task:` key and
-   executes due tasks: `auto_summary` (summarize + post) and `zombie_clean`
-   (kick inactive members). Each executed task is rescheduled to
+   executes due tasks: `auto_summary` (summarize + post), `zombie_clean`
+   (kick inactive members) and `filter_refresh` (re-import the chat's remote
+   word lists). Each executed task is rescheduled to
    `now + IntervalHours`. Individual failures are collected in the
    `RunReport`, never abort the sweep.
 
@@ -98,7 +100,7 @@ One KV namespace (binding `KV`). All values are JSON. Repositories in
 | `captcha:<chatID>:<userID>` | `moderation.Session` (challenge + `ExpiresAt`) | challenge timeout + 60s grace | TTL self-cleans even if the sweeper never runs |
 | `msglog:<chatID>` | `summary.Ring` (≤ 500 messages) | none | oldest evicted when full |
 | `activity:<chatID>` | `map[userID]lastSeen` (user IDs as decimal string keys) | none | capped at 2000 entries, oldest-seen evicted; key deleted when empty |
-| `task:<kind>:<chatID>` | `schedule.Task` (`NextRunAt`, `IntervalHours`) | none | `kind` is `auto_summary` or `zombie_clean` |
+| `task:<kind>:<chatID>` | `schedule.Task` (`NextRunAt`, `IntervalHours`) | none | `kind` is `auto_summary`, `zombie_clean` or `filter_refresh` |
 
 Prefix scans (`ListKeys`) are used only by the cron sweeps (`captcha:`,
 `task:`). Missing keys surface as `ports.ErrNotFound` (Cloudflare KV's

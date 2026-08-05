@@ -16,7 +16,8 @@ render the reply from `texts.go`.
 - **Commands** → `parseCommand` lower-cases the name, strips any `@botname`
   suffix, splits args; `commandTarget` ignores commands addressed at other
   bots in the same group. Routed in `handleCommand` to one `cmd*` method per
-  command (`/xqt`, `/invite`, `/filter`, `/captcha`, `/kick` `/ban` `/mute`
+  command (`/xqt`, `/invite`, `/filter` — incl. `import`/`update` for remote
+  word lists — `/captcha`, `/kick` `/ban` `/mute`
   `/unmute`, `/autoreact`, `/summary`, `/clean`, `/welcome`, `/roll`,
   `/pick`, `/start`, `/help`).
 - **Ordinary group text** → `GroupMessagePipeline.HandleMessage`.

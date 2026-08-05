@@ -24,17 +24,19 @@ type TaskRunner struct {
 	sum      *SummaryService
 	zom      *ZombieService
 	cap      *CaptchaService
+	mod      *ModerationService
 	tg       ports.TelegramGateway
 	settings ports.SettingsRepository
 }
 
 // NewTaskRunner builds the runner.
-func NewTaskRunner(tasks ports.TaskRepository, sum *SummaryService, zom *ZombieService, cap *CaptchaService, tg ports.TelegramGateway, settings ports.SettingsRepository) *TaskRunner {
+func NewTaskRunner(tasks ports.TaskRepository, sum *SummaryService, zom *ZombieService, cap *CaptchaService, mod *ModerationService, tg ports.TelegramGateway, settings ports.SettingsRepository) *TaskRunner {
 	return &TaskRunner{
 		tasks:    tasks,
 		sum:      sum,
 		zom:      zom,
 		cap:      cap,
+		mod:      mod,
 		tg:       tg,
 		settings: settings,
 	}
@@ -66,6 +68,8 @@ func (r *TaskRunner) Run(ctx context.Context, now time.Time) (*RunReport, error)
 			r.runAutoSummary(ctx, t, report)
 		case schedule.KindZombieClean:
 			r.runZombieClean(ctx, t, report)
+		case schedule.KindFilterRefresh:
+			r.runFilterRefresh(ctx, t, report)
 		}
 		if err := r.tasks.Save(ctx, t.Rescheduled(now)); err != nil {
 			report.Errors = append(report.Errors, err)
@@ -100,4 +104,12 @@ func (r *TaskRunner) runZombieClean(ctx context.Context, t schedule.Task, report
 		return
 	}
 	report.ZombiesKicked += len(res.Kicked)
+}
+
+// runFilterRefresh re-imports the chat's remote word lists (system task, no
+// admin check).
+func (r *TaskRunner) runFilterRefresh(ctx context.Context, t schedule.Task, report *RunReport) {
+	if _, err := r.mod.RefreshAllWordLists(ctx, t.ChatID); err != nil {
+		report.Errors = append(report.Errors, err)
+	}
 }

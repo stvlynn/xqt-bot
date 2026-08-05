@@ -5,7 +5,7 @@
 把 bot 拉进群并设为管理员，它就能帮你：
 
 - **拉人进群**：生成 `t.me` 拉人链接，群成员点开后私聊 bot，获得**仅一次、限时有效**的入群邀请链接
-- **群管理**：内置广告/诈骗敏感词库 + 自定义关键词/正则，命中自动删消息并禁言；新成员进群人机验证（按钮或图片验证码）；回复消息一键 `/kick`、`/ban`、`/mute`
+- **群管理**：远程敏感词库一键导入、每日自动刷新（自带默认词库）+ 自定义关键词/正则，命中自动删消息并禁言；新成员进群人机验证（按钮或图片验证码）；回复消息一键 `/kick`、`/ban`、`/mute`
 - **群聊总结**：接入任意 OpenAI 兼容大模型，`/summary` 一键总结最近 N 小时聊天，也可开启每 N 小时自动总结
 - **定时任务**：按周期自动总结、自动清理长期不发言的僵尸成员
 - **自动表情**：关键词/正则触发 emoji reaction，也可交给大模型自由发挥
@@ -40,6 +40,7 @@ make webhook-setup   # 告诉 Telegram webhook 地址 + 注册命令菜单
 | secret | `LLM_API_KEY` | OpenAI 兼容 API key（可选，不配置则 AI 功能关闭） |
 | var | `LLM_BASE_URL` / `LLM_MODEL` | 模型端点与型号，默认 OpenAI `gpt-4o-mini`，可指向 Cloudflare AI Gateway |
 | var | `BOT_USERNAME` | bot 用户名（不含 @），用于生成拉人链接 |
+| var | `FILTER_LIST_URL` | 默认敏感词库地址（可选，配置后群里发 `/filter import` 即可一键导入） |
 
 本地开发：`cp .dev.vars.example .dev.vars` 填入密钥后 `make dev`。
 
@@ -50,6 +51,7 @@ make webhook-setup   # 告诉 Telegram webhook 地址 + 注册命令菜单
 | `/xqt` | 管理面板（开关验证、自动总结、查看配置） |
 | `/invite` | 生成拉人链接，转发给谁谁能进 |
 | `/filter add 词` `/filter add /正则/` `/filter del 词` | 管理敏感词 |
+| `/filter import [网址]` `/filter update` | 导入 / 刷新远程敏感词库 |
 | `/captcha on\|off\|button\|image` | 进群验证 |
 | `/kick` `/ban` `/mute 10` `/unmute` | 回复目标消息使用 |
 | `/autoreact 词 表情`、`/autoreact /正则/ 表情`、`/autoreact del 词`、`/autoreact llm on` | 自动表情 |

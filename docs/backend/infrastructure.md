@@ -70,18 +70,28 @@ instruct ≤ 300 chars, reaction picking answers one whitelisted emoji or
 `/captcha image` mode; the bytes go out through
 `TelegramGateway.SendPhoto`.
 
+## `wordlist` — remote filter-list gateway
+
+`Gateway` implements `ports.WordListGateway`: it GETs a word-list URL
+(http/https only, 10 s per-request timeout, 1 MiB body cap, non-200 is an
+error) and parses the body with `moderation.ParseWordList`, tagging every
+rule with the URL as its `Source`. The default list shipped in
+`wordlist/default.txt` is wired via the `FILTER_LIST_URL` var.
+
 ## `config` — environment loading
 
 `config.Load()` reads the runtime config: `TELEGRAM_BOT_TOKEN` (the only
 required value), `TELEGRAM_WEBHOOK_SECRET`, `BOT_USERNAME`, `KV_BINDING`
-(default `KV`), `LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY`, `ENVIRONMENT`. The
+(default `KV`), `LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY`, `FILTER_LIST_URL`,
+`ENVIRONMENT`. The
 env source is per-platform: `env_js.go` reads Cloudflare bindings/secrets,
 `env_host.go` reads `os.Getenv`. The platform-independent core takes a
 getter function so it is testable on the host.
 
 ## Outbound HTTP
 
-Every outbound call (Telegram API, LLM API) shares the `*http.Client` built
+Every outbound call (Telegram API, LLM API, word-list fetches) shares the
+`*http.Client` built
 by `newHTTPClient()` in `main.go`'s platform files: Workers fetch transport
 on js/wasm, standard 60 s client on host. Never create ad-hoc clients in
 adapters — see

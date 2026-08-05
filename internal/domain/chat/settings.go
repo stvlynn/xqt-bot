@@ -28,6 +28,8 @@ type FilterConfig struct {
 	Rules         []moderation.FilterRule `json:"rules"`
 	MuteMinutes   int                     `json:"mute_minutes"`   // how long an offender is muted; 0 = delete only
 	DeleteMessage bool                    `json:"delete_message"` // delete the offending message
+	// Sources lists the remote word-list URLs imported into Rules.
+	Sources []string `json:"sources,omitempty"`
 }
 
 // AutoReactConfig controls automatic emoji reactions.
@@ -85,7 +87,7 @@ func Default(chatID int64, title string) *Settings {
 		},
 		Filter: FilterConfig{
 			Enabled:       true,
-			Rules:         moderation.BuiltinRules(),
+			Rules:         []moderation.FilterRule{},
 			MuteMinutes:   10,
 			DeleteMessage: true,
 		},

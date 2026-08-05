@@ -3,19 +3,28 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stvlynn/xqt-bot/internal/domain/chat"
 	"github.com/stvlynn/xqt-bot/internal/domain/moderation"
+	"github.com/stvlynn/xqt-bot/internal/domain/schedule"
 )
 
 func setupModeration() (*ModerationService, *fakeSettingsRepo, *fakeTelegram) {
-	repo := newFakeSettingsRepo()
-	tg := newFakeTelegram()
-	svc := NewModerationService(repo, tg)
-	svc.now = fixedClock
+	svc, repo, tg, _, _ := setupWordList()
 	return svc, repo, tg
+}
+
+func setupWordList() (*ModerationService, *fakeSettingsRepo, *fakeTelegram, *fakeTaskRepo, *fakeWordList) {
+	repo := newFakeSettingsRepo()
+	tasks := newFakeTaskRepo()
+	tg := newFakeTelegram()
+	wl := newFakeWordList()
+	svc := NewModerationService(repo, tasks, tg, wl)
+	svc.now = fixedClock
+	return svc, repo, tg, tasks, wl
 }
 
 func TestCheckMessageHitDeletesAndMutes(t *testing.T) {
@@ -222,5 +231,156 @@ func TestKickBanMuteUnmuteGuards(t *testing.T) {
 	}
 	if want := fixedNow.Add(time.Hour); !tg.restrictions[0].until.Equal(want) {
 		t.Fatalf("want mute until %v, got %v", want, tg.restrictions[0].until)
+	}
+}
+
+func TestImportWordList(t *testing.T) {
+	svc, repo, tg, tasks, wl := setupWordList()
+	ctx := context.Background()
+	const url = "https://x/list.txt"
+
+	if _, err := svc.ImportWordList(ctx, -1, 8, url); !errors.Is(err, ErrNotAdmin) {
+		t.Fatalf("want ErrNotAdmin, got %v", err)
+	}
+	tg.setAdmin(-1, 7, true)
+
+	// Manual rule collides with one fetched rule -> skipped.
+	st := chat.Default(-1, "")
+	st.Filter.Rules = []moderation.FilterRule{{Kind: moderation.RuleWord, Pattern: "spam"}}
+	repo.seed(st)
+	wl.rules[url] = wordRules(url, "spam", "scam", "phish")
+
+	res, err := svc.ImportWordList(ctx, -1, 7, url)
+	if err != nil {
+		t.Fatalf("ImportWordList: %v", err)
+	}
+	if res.Added != 2 || res.Skipped != 1 || res.Total != 3 || res.URL != url {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+	got, _ := repo.Get(ctx, -1)
+	if len(got.Filter.Sources) != 1 || got.Filter.Sources[0] != url {
+		t.Fatalf("want source recorded, got %+v", got.Filter.Sources)
+	}
+	// Imported rules carry the source; the manual rule does not.
+	for _, r := range got.Filter.Rules {
+		if r.Pattern == "spam" && r.Source != "" {
+			t.Fatalf("manual rule must keep empty source: %+v", r)
+		}
+		if r.Pattern != "spam" && r.Source != url {
+			t.Fatalf("imported rule must carry source: %+v", r)
+		}
+	}
+	// First source schedules the daily refresh task.
+	list, _ := tasks.List(ctx)
+	if len(list) != 1 || list[0].Kind != schedule.KindFilterRefresh ||
+		!list[0].NextRunAt.Equal(fixedNow.Add(24*time.Hour)) {
+		t.Fatalf("want filter_refresh task, got %+v", list)
+	}
+
+	// Re-importing the same URL replaces its old rules and creates no task.
+	wl.rules[url] = wordRules(url, "scam", "malware")
+	res, err = svc.ImportWordList(ctx, -1, 7, url)
+	if err != nil {
+		t.Fatalf("re-import: %v", err)
+	}
+	if res.Added != 2 || res.Total != 3 { // manual spam + scam + malware
+		t.Fatalf("unexpected re-import result: %+v", res)
+	}
+	got, _ = repo.Get(ctx, -1)
+	var patterns []string
+	for _, r := range got.Filter.Rules {
+		patterns = append(patterns, r.Pattern)
+	}
+	if len(got.Filter.Sources) != 1 || len(patterns) != 3 {
+		t.Fatalf("unexpected state after re-import: %+v", got.Filter)
+	}
+	list, _ = tasks.List(ctx)
+	if len(list) != 1 {
+		t.Fatalf("re-import must not create another task, got %+v", list)
+	}
+}
+
+func TestImportWordListLimit(t *testing.T) {
+	svc, repo, tg, _, wl := setupWordList()
+	ctx := context.Background()
+	const url = "https://x/big.txt"
+	tg.setAdmin(-1, 7, true)
+
+	st := chat.Default(-1, "")
+	for i := 0; i < maxFilterRules; i++ {
+		st.Filter.Rules = append(st.Filter.Rules, moderation.FilterRule{
+			Kind: moderation.RuleWord, Pattern: fmt.Sprintf("w%d", i),
+		})
+	}
+	repo.seed(st)
+	wl.rules[url] = wordRules(url, "one-more")
+
+	if _, err := svc.ImportWordList(ctx, -1, 7, url); err == nil {
+		t.Fatalf("want limit error")
+	}
+	got, _ := repo.Get(ctx, -1)
+	if len(got.Filter.Sources) != 0 || len(got.Filter.Rules) != maxFilterRules {
+		t.Fatalf("failed import must not persist anything")
+	}
+}
+
+func TestRefreshWordLists(t *testing.T) {
+	svc, repo, tg, _, wl := setupWordList()
+	ctx := context.Background()
+	tg.setAdmin(-1, 7, true)
+
+	if _, err := svc.RefreshWordLists(ctx, -1, 7); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("want ErrNotFound without sources, got %v", err)
+	}
+
+	const okURL, badURL = "https://x/ok.txt", "https://x/bad.txt"
+	st := chat.Default(-1, "")
+	st.Filter.Sources = []string{okURL, badURL}
+	st.Filter.Rules = []moderation.FilterRule{
+		{Kind: moderation.RuleWord, Pattern: "old", Source: okURL},
+		{Kind: moderation.RuleWord, Pattern: "stale", Source: badURL},
+		{Kind: moderation.RuleWord, Pattern: "manual"},
+	}
+	repo.seed(st)
+	wl.rules[okURL] = wordRules(okURL, "new1", "new2")
+	wl.errs[badURL] = errors.New("boom")
+
+	res, err := svc.RefreshWordLists(ctx, -1, 7)
+	if err != nil {
+		t.Fatalf("RefreshWordLists: %v", err)
+	}
+	if res.Sources != 2 || len(res.Failed) != 1 || res.Failed[0] != badURL {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+	// "old" replaced by new1+new2; failed source keeps its stale rules.
+	if res.Added != 1 { // 3 -> 4 rules
+		t.Fatalf("want net +1, got %+v", res)
+	}
+	got, _ := repo.Get(ctx, -1)
+	var patterns []string
+	for _, r := range got.Filter.Rules {
+		patterns = append(patterns, r.Pattern)
+	}
+	want := []string{"stale", "manual", "new1", "new2"}
+	if fmt.Sprint(patterns) != fmt.Sprint(want) {
+		t.Fatalf("want %v, got %v", want, patterns)
+	}
+}
+
+func TestRefreshWordListsNotAdmin(t *testing.T) {
+	svc, _, _, _, _ := setupWordList()
+	if _, err := svc.RefreshWordLists(context.Background(), -1, 8); !errors.Is(err, ErrNotAdmin) {
+		t.Fatalf("want ErrNotAdmin, got %v", err)
+	}
+}
+
+func TestRefreshAllWordListsNoSourcesIsNoop(t *testing.T) {
+	svc, _, _, _, _ := setupWordList()
+	res, err := svc.RefreshAllWordLists(context.Background(), -1)
+	if err != nil {
+		t.Fatalf("RefreshAllWordLists: %v", err)
+	}
+	if res.Sources != 0 || len(res.Failed) != 0 {
+		t.Fatalf("want empty result, got %+v", res)
 	}
 }

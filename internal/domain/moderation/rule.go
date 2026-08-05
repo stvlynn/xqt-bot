@@ -20,6 +20,9 @@ const (
 type FilterRule struct {
 	Kind    RuleKind `json:"kind"`
 	Pattern string   `json:"pattern"`
+	// Source is empty for rules added by hand (/filter add) and holds the
+	// word-list URL for rules imported via /filter import.
+	Source string `json:"source,omitempty"`
 }
 
 // NewWordRule builds a substring rule. It rejects empty words.
@@ -62,33 +65,4 @@ func MatchAny(rules []FilterRule, text string) (FilterRule, bool) {
 		}
 	}
 	return FilterRule{}, false
-}
-
-// BuiltinRules is the small built-in advertising/scam library. It targets
-// patterns that are spam in virtually every group, independent of topic.
-// Administrators extend it with their own words via /filter add.
-func BuiltinRules() []FilterRule {
-	words := []string{
-		"刷单", "兼职加微", "加v信", "加vx", "日结工资",
-		"usdt", "代充", "空投领取", "合约带单",
-		"赌场", "博彩", "真人荷官",
-	}
-	regexps := []string{
-		`(?i)\bt\.me/(joinchat|\+)[0-9a-z_-]+`,         // unsolicited group invite links
-		`(?i)(whatsapp|telegram)\s*[+＋]?\d[\d\s-]{7,}`, // phone-number harvesting
-	}
-	rules := make([]FilterRule, 0, len(words)+len(regexps))
-	for _, w := range words {
-		r, err := NewWordRule(w)
-		if err == nil {
-			rules = append(rules, r)
-		}
-	}
-	for _, p := range regexps {
-		r, err := NewRegexRule(p)
-		if err == nil {
-			rules = append(rules, r)
-		}
-	}
-	return rules
 }

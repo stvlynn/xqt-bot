@@ -48,7 +48,10 @@ type Deps struct {
 	Fun         *application.FunService
 	Pipeline    *application.GroupMessagePipeline
 	BotUsername string // without the leading "@"
-	RNG         *rand.Rand
+	// DefaultListURL is the word list a bare "/filter import" fetches; may
+	// be empty when the deployment configures none.
+	DefaultListURL string
+	RNG            *rand.Rand
 }
 
 // Handler dispatches Telegram updates to the application services.
@@ -470,6 +473,38 @@ func (h *Handler) cmdFilter(ctx context.Context, m *models.Message, args string)
 		}
 		_, err = h.d.Telegram.SendText(ctx, m.Chat.ID, fmt.Sprintf(textFilterDeletedT, pattern), nil)
 		return err
+	case args == "import" || strings.HasPrefix(args, "import "):
+		url := strings.TrimSpace(strings.TrimPrefix(args, "import"))
+		if url == "" {
+			url = h.d.DefaultListURL
+		}
+		if url == "" {
+			_, err := h.d.Telegram.SendText(ctx, m.Chat.ID, textUsageFilter, nil)
+			return err
+		}
+		res, err := h.d.Moderation.ImportWordList(ctx, m.Chat.ID, m.From.ID, url)
+		if err != nil {
+			return h.replyError(ctx, m.Chat.ID, err)
+		}
+		_, err = h.d.Telegram.SendText(ctx, m.Chat.ID,
+			fmt.Sprintf(textFilterImportedT, res.URL, res.Added, res.Skipped, res.Total),
+			&ports.SendOpts{DisableLinkPreview: true})
+		return err
+	case args == "update":
+		res, err := h.d.Moderation.RefreshWordLists(ctx, m.Chat.ID, m.From.ID)
+		if errors.Is(err, application.ErrNotFound) {
+			_, serr := h.d.Telegram.SendText(ctx, m.Chat.ID, textFilterNoSources, nil)
+			return serr
+		}
+		if err != nil {
+			return h.replyError(ctx, m.Chat.ID, err)
+		}
+		text := fmt.Sprintf(textFilterRefreshedT, res.Sources, res.Added)
+		if len(res.Failed) > 0 {
+			text += fmt.Sprintf(textFilterRefreshFailedT, strings.Join(res.Failed, "\n"))
+		}
+		_, err = h.d.Telegram.SendText(ctx, m.Chat.ID, text, &ports.SendOpts{DisableLinkPreview: true})
+		return err
 	default:
 		_, err := h.d.Telegram.SendText(ctx, m.Chat.ID, textUsageFilter, nil)
 		return err
@@ -521,6 +556,7 @@ func filterListText(st *chat.Settings) string {
 			fmt.Fprintf(&b, "\n"+filterRuleLineWordT, i+1, r.Pattern)
 		}
 	}
+	fmt.Fprintf(&b, "\n\n"+filterSourcesLineT, len(st.Filter.Sources))
 	return b.String()
 }
 

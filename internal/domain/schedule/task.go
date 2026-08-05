@@ -8,8 +8,9 @@ import "time"
 type Kind string
 
 const (
-	KindAutoSummary Kind = "auto_summary" // periodic LLM chat summary
-	KindZombieClean Kind = "zombie_clean" // kick members inactive beyond the threshold
+	KindAutoSummary   Kind = "auto_summary"   // periodic LLM chat summary
+	KindZombieClean   Kind = "zombie_clean"   // kick members inactive beyond the threshold
+	KindFilterRefresh Kind = "filter_refresh" // re-import remote filter word lists
 )
 
 // Task is one recurring job for one chat. NextRunAt is recomputed after

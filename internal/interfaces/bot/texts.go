@@ -35,7 +35,7 @@ const (
 /welcome 文本 — 设置欢迎语，{name}、{chat} 会自动替换；/welcome off 关闭
 
 内容管理
-/filter — 查看敏感词规则；/filter add 词语 或 /filter add /正则/ 添加；/filter del 词语或编号 删除
+/filter — 查看敏感词规则；/filter add 词语 或 /filter add /正则/ 添加；/filter del 词语或编号 删除；/filter import 网址 导入远程词库；/filter update 刷新词库
 /kick — 回复某人的消息：移出群聊
 /ban — 回复某人的消息：封禁
 /mute 分钟 — 回复某人的消息：禁言（默认 10 分钟）
@@ -115,7 +115,7 @@ const (
 
 // /filter.
 const (
-	textUsageFilter = "用法：\n/filter 查看当前规则\n/filter add 词语 — 添加敏感词\n/filter add /正则/ — 添加正则规则\n/filter del 词语或编号 — 删除规则"
+	textUsageFilter = "用法：\n/filter 查看当前规则\n/filter add 词语 — 添加敏感词\n/filter add /正则/ — 添加正则规则\n/filter del 词语或编号 — 删除规则\n/filter import 网址 — 导入远程词库，如 /filter import https://example.com/list.txt（不带网址则用默认词库）\n/filter update — 刷新所有已导入的词库"
 	// filterListHeaderT: on/off state, hit action.
 	filterListHeaderT = "敏感词过滤：%s\n命中后：%s\n\n规则列表（/filter del 编号 可删除）："
 	// filterRuleLineWordT / filterRuleLineRegexT: index, pattern.
@@ -126,6 +126,15 @@ const (
 	textFilterAddedT     = "✅ 已添加规则：%s"
 	textFilterDeletedT   = "✅ 已删除规则：%s"
 	textFilterNoRules    = "（暂无规则）"
+	// filterSourcesLineT: imported source count.
+	filterSourcesLineT = "已导入词库来源：%d 个（/filter import 导入，/filter update 刷新）"
+	// textFilterImportedT: source URL, added count, skipped duplicates, total.
+	textFilterImportedT = "✅ 词库导入完成\n来源：%s\n新增 %d 条，跳过重复 %d 条，当前共 %d 条规则"
+	// textFilterRefreshedT: source count, net rule change.
+	textFilterRefreshedT = "✅ 词库已刷新：%d 个来源，规则净变化 %+d 条"
+	// textFilterRefreshFailedT: newline-joined failed source URLs.
+	textFilterRefreshFailedT = "\n⚠️ 以下来源刷新失败：\n%s"
+	textFilterNoSources      = "还没有导入过词库，先发 /filter import 网址 导入一个吧"
 )
 
 // Reply-target moderation commands.

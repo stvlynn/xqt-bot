@@ -27,3 +27,5 @@ LLM_BASE_URL = "https://api.openai.com/v1"
 LLM_MODEL = "gpt-4o-mini"
 ENVIRONMENT = "production"
 BOT_USERNAME = "xqtttbot"
+# Default remote filter word list, imported by a bare "/filter import".
+FILTER_LIST_URL = "https://raw.githubusercontent.com/stvlynn/xqt-bot/main/wordlist/default.txt"

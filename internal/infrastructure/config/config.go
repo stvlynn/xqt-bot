@@ -30,6 +30,9 @@ type Config struct {
 	// LLMAPIKey authorizes the LLM endpoint (env LLM_API_KEY). When empty,
 	// the LLM gateway reports Available() == false.
 	LLMAPIKey string
+	// FilterListURL is the default remote word list imported by a bare
+	// "/filter import" (env FILTER_LIST_URL, optional).
+	FilterListURL string
 	// Environment distinguishes dev/staging/prod (env ENVIRONMENT).
 	Environment string
 }
@@ -54,6 +57,7 @@ func load(get envGetter) (*Config, error) {
 		LLMBaseURL:    get("LLM_BASE_URL"),
 		LLMModel:      get("LLM_MODEL"),
 		LLMAPIKey:     get("LLM_API_KEY"),
+		FilterListURL: get("FILTER_LIST_URL"),
 		Environment:   get("ENVIRONMENT"),
 	}
 	if cfg.TelegramToken == "" {

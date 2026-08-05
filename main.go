@@ -15,6 +15,7 @@ import (
 	"github.com/stvlynn/xqt-bot/internal/infrastructure/kv"
 	"github.com/stvlynn/xqt-bot/internal/infrastructure/llm"
 	"github.com/stvlynn/xqt-bot/internal/infrastructure/telegram"
+	"github.com/stvlynn/xqt-bot/internal/infrastructure/wordlist"
 	"github.com/stvlynn/xqt-bot/internal/interfaces/bot"
 	ifhttp "github.com/stvlynn/xqt-bot/internal/interfaces/http"
 )
@@ -59,9 +60,10 @@ func setup() (http.Handler, *application.TaskRunner, error) {
 	}
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	wordlistGateway := wordlist.NewGateway(httpClient)
 	captchaSvc := application.NewCaptchaService(settingsRepo, captchaRepo, tg, renderer, rng)
 	settingsSvc := application.NewSettingsService(settingsRepo, tg)
-	moderationSvc := application.NewModerationService(settingsRepo, tg)
+	moderationSvc := application.NewModerationService(settingsRepo, taskRepo, tg, wordlistGateway)
 	inviteSvc := application.NewInviteService(settingsRepo, tg, cfg.BotUsername)
 	reactionSvc := application.NewReactionService(settingsRepo, tg, llmGateway)
 	summarySvc := application.NewSummaryService(settingsRepo, msglogRepo, taskRepo, tg, llmGateway)
@@ -70,21 +72,22 @@ func setup() (http.Handler, *application.TaskRunner, error) {
 	pipeline := application.NewGroupMessagePipeline(moderationSvc, reactionSvc, summarySvc, zombieSvc)
 
 	handler := bot.NewHandler(bot.Deps{
-		Telegram:    tg,
-		LLM:         llmGateway,
-		Captcha:     captchaSvc,
-		Settings:    settingsSvc,
-		Moderation:  moderationSvc,
-		Invite:      inviteSvc,
-		Reaction:    reactionSvc,
-		Summary:     summarySvc,
-		Zombie:      zombieSvc,
-		Fun:         funSvc,
-		Pipeline:    pipeline,
-		BotUsername: cfg.BotUsername,
-		RNG:         rng,
+		Telegram:       tg,
+		LLM:            llmGateway,
+		Captcha:        captchaSvc,
+		Settings:       settingsSvc,
+		Moderation:     moderationSvc,
+		Invite:         inviteSvc,
+		Reaction:       reactionSvc,
+		Summary:        summarySvc,
+		Zombie:         zombieSvc,
+		Fun:            funSvc,
+		Pipeline:       pipeline,
+		BotUsername:    cfg.BotUsername,
+		DefaultListURL: cfg.FilterListURL,
+		RNG:            rng,
 	})
-	runner := application.NewTaskRunner(taskRepo, summarySvc, zombieSvc, captchaSvc, tg, settingsRepo)
+	runner := application.NewTaskRunner(taskRepo, summarySvc, zombieSvc, captchaSvc, moderationSvc, tg, settingsRepo)
 
 	return ifhttp.NewMux(cfg, handler), runner, nil
 }

@@ -423,3 +423,41 @@ func (f *fakeRenderer) RenderCaptcha(_ string) ([]byte, error) {
 	}
 	return f.png, nil
 }
+
+// --- WordListGateway ---
+
+type fakeWordList struct {
+	mu    sync.Mutex
+	rules map[string][]moderation.FilterRule
+	errs  map[string]error
+	calls []string
+}
+
+func newFakeWordList() *fakeWordList {
+	return &fakeWordList{
+		rules: make(map[string][]moderation.FilterRule),
+		errs:  make(map[string]error),
+	}
+}
+
+func (f *fakeWordList) Fetch(_ context.Context, url string) ([]moderation.FilterRule, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, url)
+	if err := f.errs[url]; err != nil {
+		return nil, err
+	}
+	rules := f.rules[url]
+	out := make([]moderation.FilterRule, len(rules))
+	copy(out, rules)
+	return out, nil
+}
+
+// wordRules builds fetched rules for a URL, tagged with it as the source.
+func wordRules(url string, patterns ...string) []moderation.FilterRule {
+	rules := make([]moderation.FilterRule, 0, len(patterns))
+	for _, p := range patterns {
+		rules = append(rules, moderation.FilterRule{Kind: moderation.RuleWord, Pattern: p, Source: url})
+	}
+	return rules
+}
