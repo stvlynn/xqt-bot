@@ -59,6 +59,23 @@ make webhook-setup   # 告诉 Telegram webhook 地址 + 注册命令菜单
 | `/clean`、`/clean go`、`/clean days 45` | 僵尸成员清理 |
 | `/welcome 文本`、`/welcome off` | 欢迎语，支持 `{name}` `{chat}` |
 
+## 远程敏感词库
+
+`/filter import <网址>` 可以导入任何「一行一条」的纯文本词库（支持 `/正则/` 行与 `#` 注释）。
+本仓库自带面向 Telegram 广告/诈骗引流的精选库 [`wordlist/default.txt`](wordlist/default.txt)（宁缺毋滥，避免误伤正常聊天），群里发 `/filter import` 即可使用。
+
+调研过 GitHub 上的主流敏感词库，直接可用的不多，供参考：
+
+| 词库 | 规模 | 与本 bot 的兼容性 |
+| --- | --- | --- |
+| [cjh0613/tencent-sensitive-words](https://github.com/cjh0613/tencent-sensitive-words) `sensitive_words_lines.txt` | 4.8 万条 | 格式兼容（一行一条），但超出单群 5000 条上限，且内容偏政治审查向，不适合群反广告 |
+| [houbb/sensitive-word](https://github.com/houbb/sensitive-word) `dict_*.txt` | 6.5 万条 | 同上，且单文件超 1MiB 导入上限 |
+| [fwwdn/sensitive-stop-words](https://github.com/fwwdn/sensitive-stop-words) | 数百条/文件 | 分类清晰，但部分行尾带逗号、含「网络」等泛词，导入前需自行清洗 |
+| [57ing/Sensitive-word](https://github.com/57ing/Sensitive-word) | 数千条 | 不兼容（管道符单行 / GBK 编码） |
+
+如果你想用大型词库：先按本格式清洗后放到自己的仓库/对象存储，再 `/filter import` 你的地址。
+上限（5000 条/群、1MiB/文件）是有意为之：每条群消息都要逐条规则匹配，规则过多会拖慢响应并撑大配置存储。
+
 ## 技术栈与架构
 
 - Go → WASM（[`syumai/workers`](https://github.com/syumai/workers)），webhook 模式（[`go-telegram/bot`](https://github.com/go-telegram/bot)）
