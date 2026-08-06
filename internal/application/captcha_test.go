@@ -61,8 +61,10 @@ func TestOnMemberJoinedButtonMode(t *testing.T) {
 	if len(tg.restrictions) != 1 || tg.restrictions[0].canSend {
 		t.Fatalf("want newcomer muted, got %+v", tg.restrictions)
 	}
-	if want := fixedNow.Add(120 * time.Second); !tg.restrictions[0].until.Equal(want) {
-		t.Fatalf("want mute until %v, got %v", want, tg.restrictions[0].until)
+	// The mute is permanent (zero until); it lifts only after the challenge
+	// is solved, while the session expiry still governs the kick deadline.
+	if !tg.restrictions[0].until.IsZero() {
+		t.Fatalf("want permanent mute, got until %v", tg.restrictions[0].until)
 	}
 	session, err := captchas.Get(context.Background(), -1, 42)
 	if err != nil {
@@ -208,5 +210,53 @@ func TestSweepExpired(t *testing.T) {
 	}
 	if _, err := captchas.Get(context.Background(), -1, 2); err != nil {
 		t.Fatalf("pending session must survive: %v", err)
+	}
+}
+
+func TestCaptchaDuplicateJoinIsPending(t *testing.T) {
+	settings := newFakeSettingsRepo()
+	st := chat.Default(-1001, "g")
+	st.Captcha.Enabled = true
+	settings.seed(st)
+
+	captchas := newFakeCaptchaRepo()
+	tg := newFakeTelegram()
+	svc := NewCaptchaService(settings, captchas, tg, &fakeRenderer{}, rand.New(rand.NewSource(1)))
+	svc.now = fixedClock
+
+	first, err := svc.OnMemberJoined(context.Background(), -1001, 42, "u")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.Enabled || first.Pending {
+		t.Fatalf("first join should open a session: %+v", first)
+	}
+	second, err := svc.OnMemberJoined(context.Background(), -1001, 42, "u")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !second.Pending {
+		t.Fatalf("duplicate join should report Pending: %+v", second)
+	}
+	if n := len(tg.restrictions); n != 1 {
+		t.Fatalf("duplicate join must not re-restrict, got %d restrictions", n)
+	}
+}
+
+func TestCaptchaJoinRestrictsPermanently(t *testing.T) {
+	settings := newFakeSettingsRepo()
+	st := chat.Default(-1001, "g")
+	st.Captcha.Enabled = true
+	settings.seed(st)
+
+	tg := newFakeTelegram()
+	svc := NewCaptchaService(settings, newFakeCaptchaRepo(), tg, &fakeRenderer{}, rand.New(rand.NewSource(1)))
+	svc.now = fixedClock
+
+	if _, err := svc.OnMemberJoined(context.Background(), -1001, 42, "u"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tg.restrictions[0].until; !got.IsZero() {
+		t.Fatalf("restriction should be permanent (zero until), got %v", got)
 	}
 }

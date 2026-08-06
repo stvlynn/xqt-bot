@@ -19,7 +19,7 @@ curl -fsS -X POST "${API}/setWebhook" \
   -d "{
     \"url\": \"${WORKER_URL}/webhook\",
     \"secret_token\": \"${TELEGRAM_WEBHOOK_SECRET}\",
-    \"allowed_updates\": [\"message\", \"callback_query\", \"my_chat_member\"],
+    \"allowed_updates\": [\"message\", \"callback_query\", \"my_chat_member\", \"chat_member\"],
     \"drop_pending_updates\": true
   }"
 echo

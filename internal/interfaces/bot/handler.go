@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-telegram/bot/models"
@@ -58,6 +59,11 @@ type Deps struct {
 type Handler struct {
 	d   Deps
 	rng *rand.Rand
+
+	// recentJoins deduplicates the two join signals Telegram sends for one
+	// event (chat_member update + new_chat_members service message).
+	joinsMu     sync.Mutex
+	recentJoins map[[2]int64]time.Time
 }
 
 // NewHandler builds the handler from its dependencies.
@@ -66,7 +72,7 @@ func NewHandler(d Deps) *Handler {
 	if rng == nil {
 		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	}
-	return &Handler{d: d, rng: rng}
+	return &Handler{d: d, rng: rng, recentJoins: make(map[[2]int64]time.Time)}
 }
 
 // HandleUpdate routes one update. Processing failures are returned so the
@@ -78,10 +84,83 @@ func (h *Handler) HandleUpdate(ctx context.Context, u *models.Update) error {
 	switch {
 	case u.CallbackQuery != nil:
 		return h.handleCallback(ctx, u.CallbackQuery)
+	case u.ChatMember != nil:
+		return h.handleChatMember(ctx, u.ChatMember)
 	case u.Message != nil:
 		return h.handleMessage(ctx, u.Message)
 	}
 	return nil
+}
+
+// --- chat_member updates (primary join signal) ------------------------------
+
+// handleChatMember processes membership changes. A join (left/kicked ->
+// member/restricted) goes through the same verification flow as the
+// new_chat_members service message; the dedup in verifyMember collapses the
+// two signals for one join.
+func (h *Handler) handleChatMember(ctx context.Context, cm *models.ChatMemberUpdated) error {
+	if !isJoinTransition(cm.OldChatMember, cm.NewChatMember) {
+		return nil
+	}
+	user := memberUser(cm.NewChatMember)
+	if user == nil || user.IsBot {
+		return nil
+	}
+	// Administrators are never challenged.
+	if admin, err := h.d.Telegram.IsAdmin(ctx, cm.Chat.ID, user.ID); err == nil && admin {
+		return nil
+	}
+	if err := h.verifyMember(ctx, cm.Chat, user); err != nil {
+		log.Printf("member join (chat_member): chat %d user %d: %v", cm.Chat.ID, user.ID, err)
+	}
+	return nil
+}
+
+// isJoinTransition reports whether the membership change is a user joining
+// the chat. Restricted counts as joined when the user is in fact a member
+// (group-wide default permissions can restrict newcomers on arrival).
+func isJoinTransition(old, new models.ChatMember) bool {
+	wasOutside := old.Type == models.ChatMemberTypeLeft || old.Type == models.ChatMemberTypeBanned
+	joined := new.Type == models.ChatMemberTypeMember ||
+		(new.Type == models.ChatMemberTypeRestricted && new.Restricted != nil && new.Restricted.IsMember)
+	return wasOutside && joined
+}
+
+// memberUser extracts the user from the ChatMember union.
+func memberUser(cm models.ChatMember) *models.User {
+	switch cm.Type {
+	case models.ChatMemberTypeOwner:
+		return cm.Owner.User
+	case models.ChatMemberTypeAdministrator:
+		return &cm.Administrator.User // value, not pointer, in this variant
+	case models.ChatMemberTypeMember:
+		return cm.Member.User
+	case models.ChatMemberTypeRestricted:
+		return cm.Restricted.User
+	case models.ChatMemberTypeLeft:
+		return cm.Left.User
+	case models.ChatMemberTypeBanned:
+		return cm.Banned.User
+	}
+	return nil
+}
+
+// markRecentJoin records a join event and reports whether it is a duplicate
+// within the dedup window (30s). The map resets when it grows past 1024
+// entries, which is ample for the window.
+func (h *Handler) markRecentJoin(chatID, userID int64) bool {
+	const window = 30 * time.Second
+	h.joinsMu.Lock()
+	defer h.joinsMu.Unlock()
+	if len(h.recentJoins) > 1024 {
+		h.recentJoins = make(map[[2]int64]time.Time)
+	}
+	key := [2]int64{chatID, userID}
+	if at, ok := h.recentJoins[key]; ok && time.Since(at) < window {
+		return false
+	}
+	h.recentJoins[key] = time.Now()
+	return true
 }
 
 // --- messages ---------------------------------------------------------------
@@ -120,12 +199,18 @@ func (h *Handler) handleNewMembers(ctx context.Context, m *models.Message) error
 // verifyMember runs one joining member through the captcha flow, or sends
 // the welcome message when verification is disabled.
 func (h *Handler) verifyMember(ctx context.Context, c models.Chat, member *models.User) error {
+	if !h.markRecentJoin(c.ID, member.ID) {
+		return nil // duplicate join signal (chat_member + service message)
+	}
 	res, err := h.d.Captcha.OnMemberJoined(ctx, c.ID, member.ID, displayName(member))
 	if err != nil {
 		return err
 	}
 	if !res.Enabled {
 		return h.maybeSendWelcome(ctx, c, member)
+	}
+	if res.Pending {
+		return nil // a live challenge already exists for this member
 	}
 
 	name := displayName(member)

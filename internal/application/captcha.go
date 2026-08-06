@@ -17,6 +17,7 @@ const defaultCaptchaTimeoutSeconds = 120
 // CaptchaResult is the outcome of a new member joining a protected chat.
 type CaptchaResult struct {
 	Enabled   bool
+	Pending   bool // a live session already exists (duplicate join event)
 	Challenge moderation.Challenge
 	ImagePNG  []byte // set only in image mode
 }
@@ -62,12 +63,20 @@ func (s *CaptchaService) OnMemberJoined(ctx context.Context, chatID, userID int6
 	if !st.Captcha.Enabled {
 		return &CaptchaResult{Enabled: false}, nil
 	}
+	// Joins arrive through two update types (chat_member and the
+	// new_chat_members service message); a live session means this member is
+	// already being verified, so the second event is a no-op.
+	if existing, err := s.captchas.Get(ctx, chatID, userID); err == nil && !existing.Expired(s.now()) {
+		return &CaptchaResult{Enabled: true, Pending: true}, nil
+	}
 	timeout := st.Captcha.TimeoutSeconds
 	if timeout <= 0 {
 		timeout = defaultCaptchaTimeoutSeconds
 	}
 	expiresAt := s.now().Add(time.Duration(timeout) * time.Second)
-	if err := s.tg.RestrictMember(ctx, chatID, userID, false, expiresAt); err != nil {
+	// Restrict without an until date: the mute lifts only after solving the
+	// challenge (or the member is kicked by the expiry sweep).
+	if err := s.tg.RestrictMember(ctx, chatID, userID, false, time.Time{}); err != nil {
 		return nil, err
 	}
 	challenge := moderation.NewChallenge(s.rng)

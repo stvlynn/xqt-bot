@@ -176,6 +176,9 @@ func (g *Gateway) RestrictMember(ctx context.Context, chatID, userID int64, canS
 		ChatID:      chatID,
 		UserID:      userID,
 		Permissions: permissions,
+		// Independent permissions avoid Telegram implicitly granting
+		// related rights when only a subset is set.
+		UseIndependentChatPermissions: true,
 	}
 	if !until.IsZero() {
 		params.UntilDate = int(until.Unix())
