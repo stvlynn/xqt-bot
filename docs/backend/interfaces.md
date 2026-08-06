@@ -22,14 +22,19 @@ render the reply from `texts.go`.
   in-memory 30 s window per (chat, user) in the handler, and the live
   captcha session itself (`CaptchaResult.Pending`).
 - **Callback queries** → dispatched by data prefix (see below).
+- **Channel posts** (`channel_post` updates, subscribed via `allowed_updates`)
+  → `ChannelService.HandleChannelPost` copies the post into the bound group
+  with a comments button.
 - **Commands** → `parseCommand` lower-cases the name, strips any `@botname`
   suffix, splits args; `commandTarget` ignores commands addressed at other
   bots in the same group. Routed in `handleCommand` to one `cmd*` method per
   command (`/xqt`, `/invite`, `/filter` — incl. `import`/`update` for remote
   word lists — `/captcha`, `/kick` `/ban` `/mute`
-  `/unmute`, `/autoreact`, `/summary`, `/clean`, `/welcome`, `/roll`,
-  `/pick`, `/start`, `/help`).
-- **Ordinary group text** → `GroupMessagePipeline.HandleMessage`.
+  `/unmute`, `/autoreact`, `/summary`, `/clean`, `/welcome`, `/channel`,
+  `/roll`, `/pick`, `/start`, `/help`).
+- **Ordinary group text** → `GroupMessagePipeline.HandleMessage`; group
+  messages replying to a bound channel's automatic forward additionally go to
+  `ChannelService.MaybeRecordComment` (comment previews + button refresh).
 
 Rules:
 
@@ -68,6 +73,10 @@ sentinel errors instead.
 `application.ErrNotAdmin` → `textErrNotAdmin`, `ErrLLMNotConfigured` →
 `textErrLLMNotConfigured`, …, unknown errors are logged and render the
 generic `textErrUnknown`.
+
+Button labels needed inside application services (the channel comment
+buttons) stay here too: `ChannelLabels()` exports closures over the
+templates, wired into `ChannelService` in `main.go`.
 
 ## `http` — webhook mux
 

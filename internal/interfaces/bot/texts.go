@@ -1,5 +1,11 @@
 package bot
 
+import (
+	"fmt"
+
+	"github.com/stvlynn/xqt-bot/internal/application"
+)
+
 // All user-facing copy lives here (Simplified Chinese, per project
 // convention). Templates marked T are filled with fmt.Sprintf.
 
@@ -36,6 +42,7 @@ const (
 
 内容管理
 /filter — 查看敏感词规则；/filter add 词语 或 /filter add /正则/ 添加；/filter del 词语或编号 删除；/filter import 网址 导入远程词库；/filter update 刷新词库
+/channel @频道 — 绑定频道，新消息自动转发到本群并带评论按钮；/channel off 解绑
 /kick — 回复某人的消息：移出群聊
 /ban — 回复某人的消息：封禁
 /mute 分钟 — 回复某人的消息：禁言（默认 10 分钟）
@@ -195,6 +202,42 @@ const (
 	// textWelcomeToggledT: on/off state.
 	textWelcomeToggledT = "✅ 欢迎语已%s"
 )
+
+// /channel.
+const (
+	textUsageChannel = "用法：\n/channel @频道用户名 — 绑定频道，如 /channel @durov\n/channel off — 解绑\n/channel — 查看当前绑定"
+	// channelBoundT: channel display name.
+	channelBoundT = "✅ 已绑定频道 %s\n频道有新消息时，我会自动转发到本群，并附上评论按钮。"
+	// channelBoundNoPreviewsT: channel display name.
+	channelBoundNoPreviewsT   = "✅ 已绑定频道 %s\n频道有新消息时，我会自动转发到本群，并附上「去评论区」按钮。\n\n💡 把我也拉进该频道的讨论群并设为管理员，按钮里还能显示最新评论摘要。"
+	textChannelUnbound        = "✅ 已解绑频道，之后不再转发它的新消息"
+	textChannelNotBound       = "本群还没有绑定频道"
+	textChannelLinkedHere     = "这个频道的讨论群就是本群，Telegram 已经会自动转发消息并带评论入口，无需绑定"
+	textChannelNotFound       = "找不到这个频道，请检查用户名是否正确，如 /channel @durov"
+	textChannelNotAChannel    = "这不是一个频道哦，/channel 只能绑定频道"
+	textErrBotNotChannelAdmin = "我还不是该频道的管理员，请先把我加为频道管理员再绑定"
+	// channelStatusT: channel display name, comment-preview state.
+	channelStatusT = "当前绑定频道：%s\n评论摘要按钮：%s\n\n解绑请发 /channel off"
+	// commentsButtonT: recorded comment count.
+	commentsButtonT    = "💬 去评论区（%d）"
+	commentsButtonZero = "💬 去评论区"
+	// textCommentAnonymous labels comment authors Telegram hides.
+	textCommentAnonymous = "匿名"
+)
+
+// ChannelLabels exposes the channel-feature button labels to the
+// application layer without moving user-facing copy out of this package.
+func ChannelLabels() application.ChannelLabels {
+	return application.ChannelLabels{
+		CommentsButton: func(count int) string {
+			if count > 0 {
+				return fmt.Sprintf(commentsButtonT, count)
+			}
+			return commentsButtonZero
+		},
+		AnonymousAuthor: textCommentAnonymous,
+	}
+}
 
 // /roll and /pick.
 const (

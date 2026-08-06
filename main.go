@@ -54,6 +54,9 @@ func setup() (http.Handler, *application.TaskRunner, error) {
 	msglogRepo := kv.NewMessageLogRepository(store)
 	activityRepo := kv.NewActivityRepository(store)
 	taskRepo := kv.NewTaskRepository(store)
+	chanbindRepo := kv.NewChannelBindingRepository(store)
+	chanpostRepo := kv.NewForwardedPostRepository(store)
+	commentsRepo := kv.NewCommentLogRepository(store)
 
 	// LLM options: temperature is only sent when explicitly configured;
 	// endpoints like kimi-for-coding reject any explicit value.
@@ -81,6 +84,7 @@ func setup() (http.Handler, *application.TaskRunner, error) {
 	summarySvc := application.NewSummaryService(settingsRepo, msglogRepo, taskRepo, tg, llmGateway)
 	zombieSvc := application.NewZombieService(settingsRepo, activityRepo, tg)
 	funSvc := application.NewFunService()
+	channelSvc := application.NewChannelService(settingsRepo, chanbindRepo, chanpostRepo, commentsRepo, tg, bot.ChannelLabels())
 	pipeline := application.NewGroupMessagePipeline(moderationSvc, reactionSvc, summarySvc, zombieSvc)
 
 	handler := bot.NewHandler(bot.Deps{
@@ -94,6 +98,7 @@ func setup() (http.Handler, *application.TaskRunner, error) {
 		Summary:        summarySvc,
 		Zombie:         zombieSvc,
 		Fun:            funSvc,
+		Channel:        channelSvc,
 		Pipeline:       pipeline,
 		BotUsername:    cfg.BotUsername,
 		DefaultListURL: cfg.FilterListURL,

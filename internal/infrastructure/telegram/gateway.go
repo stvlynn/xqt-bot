@@ -273,3 +273,50 @@ func (g *Gateway) ChatTitle(ctx context.Context, chatID int64) (string, error) {
 	}
 	return info.Title, nil
 }
+
+// CopyMessage implements ports.TelegramGateway.
+func (g *Gateway) CopyMessage(ctx context.Context, fromChatID, toChatID int64, messageID int, buttons [][]ports.Button) (int, error) {
+	params := &bot.CopyMessageParams{
+		ChatID:     toChatID,
+		FromChatID: fromChatID,
+		MessageID:  messageID,
+	}
+	if markup := buildMarkup(buttons); markup != nil {
+		params.ReplyMarkup = markup
+	}
+	copied, err := g.bot.CopyMessage(ctx, params)
+	if err != nil {
+		return 0, fmt.Errorf("telegram: copy message %d from %d to %d: %w", messageID, fromChatID, toChatID, err)
+	}
+	return copied.ID, nil
+}
+
+// EditButtons implements ports.TelegramGateway.
+func (g *Gateway) EditButtons(ctx context.Context, chatID int64, messageID int, buttons [][]ports.Button) error {
+	params := &bot.EditMessageReplyMarkupParams{
+		ChatID:    chatID,
+		MessageID: messageID,
+	}
+	if markup := buildMarkup(buttons); markup != nil {
+		params.ReplyMarkup = markup
+	}
+	if _, err := g.bot.EditMessageReplyMarkup(ctx, params); err != nil {
+		return fmt.Errorf("telegram: edit reply markup %d/%d: %w", chatID, messageID, err)
+	}
+	return nil
+}
+
+// ChatInfo implements ports.TelegramGateway.
+func (g *Gateway) ChatInfo(ctx context.Context, chatRef any) (*ports.ChatInfo, error) {
+	info, err := g.bot.GetChat(ctx, &bot.GetChatParams{ChatID: chatRef})
+	if err != nil {
+		return nil, fmt.Errorf("telegram: get chat %v: %w", chatRef, err)
+	}
+	return &ports.ChatInfo{
+		ID:           info.ID,
+		Title:        info.Title,
+		Username:     info.Username,
+		LinkedChatID: info.LinkedChatID,
+		IsChannel:    info.Type == models.ChatTypeChannel,
+	}, nil
+}

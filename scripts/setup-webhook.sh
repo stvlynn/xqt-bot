@@ -19,7 +19,7 @@ curl -fsS -X POST "${API}/setWebhook" \
   -d "{
     \"url\": \"${WORKER_URL}/webhook\",
     \"secret_token\": \"${TELEGRAM_WEBHOOK_SECRET}\",
-    \"allowed_updates\": [\"message\", \"callback_query\", \"my_chat_member\", \"chat_member\"],
+    \"allowed_updates\": [\"message\", \"callback_query\", \"my_chat_member\", \"chat_member\", \"channel_post\"],
     \"drop_pending_updates\": true
   }"
 echo
@@ -43,6 +43,7 @@ curl -fsS -X POST "${API}/setMyCommands" \
       {"command": "summary",   "description": "生成群聊总结：/summary [小时数]"},
       {"command": "clean",     "description": "清理僵尸成员：/clean 预览，/clean go 执行"},
       {"command": "welcome",   "description": "设置欢迎语：/welcome 文本，/welcome off 关闭"},
+      {"command": "channel",   "description": "绑定频道自动转发：/channel @频道，/channel off 解绑"},
       {"command": "roll",      "description": "掷一个 1-100 的随机数"},
       {"command": "pick",      "description": "帮你选择：/pick 选项A 选项B ..."}
     ]

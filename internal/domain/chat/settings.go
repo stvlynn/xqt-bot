@@ -56,6 +56,19 @@ type InviteConfig struct {
 	ExpireMinutes int `json:"expire_minutes"` // invite-link validity window
 }
 
+// ChannelConfig controls forwarding one bound channel's posts into the group.
+type ChannelConfig struct {
+	ChannelID           int64  `json:"channel_id,omitempty"`
+	ChannelTitle        string `json:"channel_title,omitempty"`
+	ChannelUsername     string `json:"channel_username,omitempty"`
+	LinkedGroupID       int64  `json:"linked_group_id,omitempty"` // the channel's discussion group
+	LinkedGroupUsername string `json:"linked_group_username,omitempty"`
+	PreviewsEnabled     bool   `json:"previews_enabled,omitempty"` // bot can read the discussion group
+}
+
+// Bound reports whether the group has a channel binding configured.
+func (c ChannelConfig) Bound() bool { return c.ChannelID != 0 }
+
 // ZombieConfig controls inactive-member cleanup.
 type ZombieConfig struct {
 	InactiveDays int `json:"inactive_days"` // members silent for this long are "zombies"
@@ -72,6 +85,7 @@ type Settings struct {
 	Welcome   WelcomeConfig   `json:"welcome"`
 	Invite    InviteConfig    `json:"invite"`
 	Zombie    ZombieConfig    `json:"zombie"`
+	Channel   ChannelConfig   `json:"channel"`
 }
 
 // Default returns sensible out-of-the-box settings for a newly seen chat:

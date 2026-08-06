@@ -23,6 +23,7 @@ type Settings struct {
     Welcome   WelcomeConfig   // text with {name}/{chat} placeholders
     Invite    InviteConfig    // link validity window
     Zombie    ZombieConfig    // inactivity threshold in days
+    Channel   ChannelConfig   // bound channel (id/title/username, linked discussion group, preview toggle)
 }
 ```
 
@@ -69,6 +70,12 @@ auto-summary, welcome, LLM reactions). The KV repository materializes
   `zombie_clean` and `filter_refresh` (daily word-list re-import).
 - `invite` — deep-link payload codec: `EncodePayload(chatID)` → `j-100…`,
   `ParsePayload` back.
+- `channelpost` — channel-forwarding domain: `Comment` (a discussion-group
+  reply preview), `CommentLog` (≤ 5 previews, `Add` trims text to 20 runes
+  and evicts the oldest), `ForwardedPost` (channel post → group message
+  mapping), and pure t.me link builders (`PostLink`, `CommentPageLink`,
+  `CommentLink`; public chats use their username, private ones the numeric
+  ID without the `-100` prefix).
 
 ## Ports
 
@@ -77,9 +84,14 @@ infrastructure implements them:
 
 - Repositories: `SettingsRepository`, `CaptchaRepository` (incl.
   `ListExpired` for the cron sweep), `MessageLogRepository`,
-  `ActivityRepository` (last-seen per member), `TaskRepository`.
+  `ActivityRepository` (last-seen per member), `TaskRepository`,
+  `ChannelBindingRepository` (channel → bound group),
+  `ForwardedPostRepository` (post → group message mapping),
+  `CommentLogRepository` (per-post comment previews).
 - Gateways: `TelegramGateway` (send/edit/delete messages, inline keyboards
-  via `ports.Button`, invite links, restrict/ban, reactions, admin checks),
+  via `ports.Button`, invite links, restrict/ban, reactions, admin checks,
+  `CopyMessage`, `EditButtons`, `ChatInfo` resolving `@username` or numeric
+  IDs into a `ports.ChatInfo`),
   `LLMGateway` (`Available`, `Summarize`, `PickReaction`), `ImageRenderer`
   (`RenderCaptcha` → PNG), `WordListGateway` (`Fetch(url)` → parsed filter
   rules tagged with the source URL).

@@ -24,12 +24,15 @@ type Store interface {
   expiry logic in this project is driven by stored timestamps, not storage
   TTL (the captcha TTL is only a self-cleaning backstop).
 
-Five repositories build keys and (de)serialize JSON on top of `Store`:
+Eight repositories build keys and (de)serialize JSON on top of `Store`:
 `SettingsRepository` (`settings:<chatID>`), `CaptchaRepository`
 (`captcha:<chatID>:<userID>`, storage TTL = challenge timeout + 60s grace),
 `MessageLogRepository` (`msglog:<chatID>`, 500-message ring),
 `ActivityRepository` (`activity:<chatID>`, ≤ 2000 entries, user IDs as
-decimal string keys), `TaskRepository` (`task:<kind>:<chatID>`). Full schema:
+decimal string keys), `TaskRepository` (`task:<kind>:<chatID>`),
+`ChannelBindingRepository` (`chanbind:<channelID>`),
+`ForwardedPostRepository` (`chanpost:<channelID>:<postID>`, 7-day TTL),
+`CommentLogRepository` (`comments:<channelID>:<postID>`, 7-day TTL). Full schema:
 [`../project/architecture.md`](../project/architecture.md#kv-key-schema).
 
 Repository conventions:
@@ -46,7 +49,10 @@ Repository conventions:
 `Gateway` implements `ports.TelegramGateway` on `github.com/go-telegram/bot`:
 sending/editing/deleting messages, inline keyboards (`buildMarkup` converts
 `[][]ports.Button`), one-time invite links (`CreateChatInviteLink` with
-`MemberLimit: 1`), restrict/ban/unban, reactions, and admin checks. The bot
+`MemberLimit: 1`), restrict/ban/unban, reactions, admin checks, copying
+messages between chats (`CopyMessage`, no "forwarded from" header), replacing
+a message's keyboard (`EditButtons`), and resolving chat profiles (`ChatInfo`
+via `GetChat`, accepting `@username` or numeric IDs). The bot
 instance is created in `main.go` with `WithSkipGetMe()` (no network at
 startup) and an injected HTTP client (see below). Kick is modeled as
 ban + unban; mute as `RestrictMember` until a timestamp.

@@ -1,8 +1,10 @@
 # Application Layer
 
 `internal/application/` orchestrates use cases. It depends only on `domain`
-and the `ports` interfaces; it never touches Telegram SDK types, KV keys, or
-HTTP.
+and the `ports` interfaces; it never touches KV keys or HTTP. One deliberate
+exception: `ChannelService.MaybeRecordComment` takes the Telegram
+`models.Message` directly, because comment detection hinges on the
+`MessageOrigin` union which has no domain counterpart.
 
 ## Services
 
@@ -18,6 +20,7 @@ One service per feature area, all constructed in `setup()` (`main.go`):
 | `SummaryService` | `RecordMessage` into the ring, `SummarizeNow`, `SetAutoSummary` (writes a `task:auto_summary:` entry) |
 | `ZombieService` | `Touch` activity, `Preview`/`Clean` inactive members, `SetInactiveDays` |
 | `FunService` | `/roll` d100 duel, `/pick` random choice |
+| `ChannelService` | `Bind`/`Unbind` a channel to a group (admin-checked; refuses when the channel's discussion group is the binding chat), `HandleChannelPost` (copy the post into the bound group with a comments button, record the message mapping), `MaybeRecordComment` (detect discussion-group comments on the channel's auto-forward, store a ≤5-preview log, re-render the forwarded message's buttons) |
 
 Plus two coordinators:
 
@@ -57,6 +60,10 @@ ErrNotFound         // entity missing
 ErrTooFewMessages   // not enough messages to summarize
 ErrLLMNotConfigured // LLM feature without LLM_API_KEY
 ErrInvalidArgument  // out-of-range or empty parameters
+ErrChannelLinkedHere   // channel's discussion group is the binding chat
+ErrChannelNotFound     // channel reference cannot be resolved
+ErrNotAChannel         // /channel target is not a channel
+ErrBotNotChannelAdmin  // bot is not an administrator of the channel
 ```
 
 Add a sentinel only when the interfaces layer must render a distinct message;

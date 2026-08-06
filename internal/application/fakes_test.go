@@ -6,9 +6,11 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/stvlynn/xqt-bot/internal/domain/channelpost"
 	"github.com/stvlynn/xqt-bot/internal/domain/chat"
 	"github.com/stvlynn/xqt-bot/internal/domain/moderation"
 	"github.com/stvlynn/xqt-bot/internal/domain/ports"
@@ -252,10 +254,24 @@ type inviteCall struct {
 	memberLimit int
 }
 
+type copyCall struct {
+	fromChatID int64
+	toChatID   int64
+	messageID  int
+	buttons    [][]ports.Button
+}
+
+type editButtonsCall struct {
+	chatID    int64
+	messageID int
+	buttons   [][]ports.Button
+}
+
 type fakeTelegram struct {
 	mu sync.Mutex
 
-	admins map[[2]int64]bool
+	admins      map[[2]int64]bool
+	botNotAdmin map[int64]bool // chats where the bot itself lacks admin rights
 
 	texts        []sentText
 	deleted      []deletedMessage
@@ -264,16 +280,23 @@ type fakeTelegram struct {
 	bans         []ban
 	unbans       [][2]int64
 	inviteCalls  []inviteCall
+	copies       []copyCall
+	buttonEdits  []editButtonsCall
 
-	inviteURL string
-	chatTitle string // returned by ChatTitle
-	err       error  // injected failure for all mutating calls
+	inviteURL  string
+	chatTitle  string                    // returned by ChatTitle
+	chatInfos  map[string]ports.ChatInfo // returned by ChatInfo, keyed by fmt.Sprint(chatRef)
+	copyNextID int                       // next message ID returned by CopyMessage
+	editErr    error                     // injected failure for EditButtons
+	err        error                     // injected failure for all mutating calls
 }
 
 func newFakeTelegram() *fakeTelegram {
 	return &fakeTelegram{
-		admins:    make(map[[2]int64]bool),
-		inviteURL: "https://t.me/+fakeinvite",
+		admins:      make(map[[2]int64]bool),
+		botNotAdmin: make(map[int64]bool),
+		chatInfos:   make(map[string]ports.ChatInfo),
+		inviteURL:   "https://t.me/+fakeinvite",
 	}
 }
 
@@ -371,14 +394,49 @@ func (f *fakeTelegram) IsAdmin(_ context.Context, chatID, userID int64) (bool, e
 	return f.admins[[2]int64{chatID, userID}], nil
 }
 
-func (f *fakeTelegram) BotIsAdmin(_ context.Context, _ int64) (bool, error) {
-	return true, nil
+func (f *fakeTelegram) BotIsAdmin(_ context.Context, chatID int64) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return !f.botNotAdmin[chatID], nil
 }
 
 func (f *fakeTelegram) ChatTitle(_ context.Context, _ int64) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.chatTitle, nil
+}
+
+func (f *fakeTelegram) CopyMessage(_ context.Context, fromChatID, toChatID int64, messageID int, buttons [][]ports.Button) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return 0, f.err
+	}
+	f.copies = append(f.copies, copyCall{fromChatID: fromChatID, toChatID: toChatID, messageID: messageID, buttons: buttons})
+	f.copyNextID++
+	return 1000 + f.copyNextID, nil
+}
+
+func (f *fakeTelegram) EditButtons(_ context.Context, chatID int64, messageID int, buttons [][]ports.Button) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.editErr != nil {
+		return f.editErr
+	}
+	f.buttonEdits = append(f.buttonEdits, editButtonsCall{chatID: chatID, messageID: messageID, buttons: buttons})
+	return nil
+}
+
+func (f *fakeTelegram) ChatInfo(_ context.Context, chatRef any) (*ports.ChatInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := fmt.Sprint(chatRef)
+	info, ok := f.chatInfos[key]
+	if !ok {
+		return nil, ports.ErrNotFound
+	}
+	cp := info
+	return &cp, nil
 }
 
 // --- LLMGateway ---
@@ -467,4 +525,98 @@ func wordRules(url string, patterns ...string) []moderation.FilterRule {
 		rules = append(rules, moderation.FilterRule{Kind: moderation.RuleWord, Pattern: p, Source: url})
 	}
 	return rules
+}
+
+// --- ChannelBindingRepository ---
+
+type fakeChannelBindingRepo struct {
+	mu   sync.Mutex
+	data map[int64]int64 // channelID -> groupID
+}
+
+func newFakeChannelBindingRepo() *fakeChannelBindingRepo {
+	return &fakeChannelBindingRepo{data: make(map[int64]int64)}
+}
+
+func (f *fakeChannelBindingRepo) Set(_ context.Context, channelID, groupID int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.data[channelID] = groupID
+	return nil
+}
+
+func (f *fakeChannelBindingRepo) GetByChannel(_ context.Context, channelID int64) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	groupID, ok := f.data[channelID]
+	if !ok {
+		return 0, ports.ErrNotFound
+	}
+	return groupID, nil
+}
+
+func (f *fakeChannelBindingRepo) Delete(_ context.Context, channelID int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.data, channelID)
+	return nil
+}
+
+// --- ForwardedPostRepository ---
+
+type fakeForwardedPostRepo struct {
+	mu   sync.Mutex
+	data map[[2]int64]channelpost.ForwardedPost // key: (channelID, postID)
+}
+
+func newFakeForwardedPostRepo() *fakeForwardedPostRepo {
+	return &fakeForwardedPostRepo{data: make(map[[2]int64]channelpost.ForwardedPost)}
+}
+
+func (f *fakeForwardedPostRepo) Save(_ context.Context, p channelpost.ForwardedPost) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.data[[2]int64{p.ChannelID, int64(p.PostID)}] = p
+	return nil
+}
+
+func (f *fakeForwardedPostRepo) Get(_ context.Context, channelID int64, postID int) (*channelpost.ForwardedPost, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p, ok := f.data[[2]int64{channelID, int64(postID)}]
+	if !ok {
+		return nil, ports.ErrNotFound
+	}
+	cp := p
+	return &cp, nil
+}
+
+// --- CommentLogRepository ---
+
+type fakeCommentLogRepo struct {
+	mu   sync.Mutex
+	logs map[[2]int64]channelpost.CommentLog // key: (channelID, postID)
+}
+
+func newFakeCommentLogRepo() *fakeCommentLogRepo {
+	return &fakeCommentLogRepo{logs: make(map[[2]int64]channelpost.CommentLog)}
+}
+
+func (f *fakeCommentLogRepo) Append(_ context.Context, channelID int64, postID int, c channelpost.Comment) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := [2]int64{channelID, int64(postID)}
+	log := f.logs[key]
+	log.Add(c)
+	f.logs[key] = log
+	return nil
+}
+
+func (f *fakeCommentLogRepo) List(_ context.Context, channelID int64, postID int) ([]channelpost.Comment, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	src := f.logs[[2]int64{channelID, int64(postID)}].Comments
+	out := make([]channelpost.Comment, len(src))
+	copy(out, src)
+	return out, nil
 }

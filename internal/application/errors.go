@@ -22,4 +22,15 @@ var (
 	ErrLLMNotConfigured = errors.New("llm is not configured")
 	// ErrInvalidArgument is returned for out-of-range or empty parameters.
 	ErrInvalidArgument = errors.New("invalid argument")
+	// ErrChannelLinkedHere is returned when the channel to bind already
+	// forwards into this group natively (its discussion group is this chat).
+	ErrChannelLinkedHere = errors.New("channel discussion group is this chat")
+	// ErrChannelNotFound is returned when a channel reference cannot be resolved.
+	ErrChannelNotFound = errors.New("channel not found")
+	// ErrNotAChannel is returned when a /channel reference resolves to a
+	// non-channel chat.
+	ErrNotAChannel = errors.New("target chat is not a channel")
+	// ErrBotNotChannelAdmin is returned when the bot is not an administrator
+	// of the channel to bind.
+	ErrBotNotChannelAdmin = errors.New("bot is not an administrator of the channel")
 )

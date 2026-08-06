@@ -53,4 +53,22 @@ type TelegramGateway interface {
 	BotIsAdmin(ctx context.Context, chatID int64) (bool, error)
 	// ChatTitle returns the chat's display title (empty for private chats).
 	ChatTitle(ctx context.Context, chatID int64) (string, error)
+
+	// CopyMessage copies a message between chats without the "forwarded
+	// from" header and returns the new message's ID.
+	CopyMessage(ctx context.Context, fromChatID, toChatID int64, messageID int, buttons [][]Button) (int, error)
+	// EditButtons replaces the inline keyboard of an existing message.
+	EditButtons(ctx context.Context, chatID int64, messageID int, buttons [][]Button) error
+	// ChatInfo resolves a chat reference ("@username" or a numeric ID) into
+	// its profile.
+	ChatInfo(ctx context.Context, chatRef any) (*ChatInfo, error)
+}
+
+// ChatInfo is the resolved profile of a chat the bot can see.
+type ChatInfo struct {
+	ID           int64
+	Title        string
+	Username     string
+	LinkedChatID int64 // discussion group of a channel, 0 when none
+	IsChannel    bool
 }

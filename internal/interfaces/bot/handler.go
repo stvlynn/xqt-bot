@@ -47,6 +47,7 @@ type Deps struct {
 	Summary     *application.SummaryService
 	Zombie      *application.ZombieService
 	Fun         *application.FunService
+	Channel     *application.ChannelService
 	Pipeline    *application.GroupMessagePipeline
 	BotUsername string // without the leading "@"
 	// DefaultListURL is the word list a bare "/filter import" fetches; may
@@ -86,8 +87,19 @@ func (h *Handler) HandleUpdate(ctx context.Context, u *models.Update) error {
 		return h.handleCallback(ctx, u.CallbackQuery)
 	case u.ChatMember != nil:
 		return h.handleChatMember(ctx, u.ChatMember)
+	case u.ChannelPost != nil:
+		return h.handleChannelPost(ctx, u.ChannelPost)
 	case u.Message != nil:
 		return h.handleMessage(ctx, u.Message)
+	}
+	return nil
+}
+
+// handleChannelPost forwards one new post of a bound channel into its group.
+// Failures are logged; the webhook must not retry on them.
+func (h *Handler) handleChannelPost(ctx context.Context, m *models.Message) error {
+	if err := h.d.Channel.HandleChannelPost(ctx, m.Chat.ID, m.ID); err != nil {
+		log.Printf("channel post: channel %d message %d: %v", m.Chat.ID, m.ID, err)
 	}
 	return nil
 }
@@ -99,6 +111,10 @@ func (h *Handler) HandleUpdate(ctx context.Context, u *models.Update) error {
 // new_chat_members service message; the dedup in verifyMember collapses the
 // two signals for one join.
 func (h *Handler) handleChatMember(ctx context.Context, cm *models.ChatMemberUpdated) error {
+	// TEMPORARY join diagnostics: trace every step until the invite-link
+	// join issue is pinned down.
+	log.Printf("join-debug: chat_member chat=%d old=%s new=%s via_join_request=%v invite_link=%v",
+		cm.Chat.ID, cm.OldChatMember.Type, cm.NewChatMember.Type, cm.ViaJoinRequest, cm.InviteLink != nil)
 	if !isJoinTransition(cm.OldChatMember, cm.NewChatMember) {
 		return nil
 	}
@@ -106,9 +122,13 @@ func (h *Handler) handleChatMember(ctx context.Context, cm *models.ChatMemberUpd
 	if user == nil || user.IsBot {
 		return nil
 	}
+	log.Printf("join-debug: join detected chat=%d user=%d", cm.Chat.ID, user.ID)
 	// Administrators are never challenged.
 	if admin, err := h.d.Telegram.IsAdmin(ctx, cm.Chat.ID, user.ID); err == nil && admin {
+		log.Printf("join-debug: user %d is admin, skipping", user.ID)
 		return nil
+	} else if err != nil {
+		log.Printf("join-debug: IsAdmin chat=%d user=%d: %v", cm.Chat.ID, user.ID, err)
 	}
 	if err := h.verifyMember(ctx, cm.Chat, user); err != nil {
 		log.Printf("member join (chat_member): chat %d user %d: %v", cm.Chat.ID, user.ID, err)
@@ -167,6 +187,7 @@ func (h *Handler) markRecentJoin(chatID, userID int64) bool {
 
 func (h *Handler) handleMessage(ctx context.Context, m *models.Message) error {
 	if len(m.NewChatMembers) > 0 {
+		log.Printf("join-debug: new_chat_members service message chat=%d members=%d", m.Chat.ID, len(m.NewChatMembers))
 		return h.handleNewMembers(ctx, m)
 	}
 	if name, args, ok := parseCommand(m.Text); ok {
@@ -175,6 +196,13 @@ func (h *Handler) handleMessage(ctx context.Context, m *models.Message) error {
 	if m.Text != "" && m.From != nil && isGroupChat(m.Chat) {
 		if err := h.d.Pipeline.HandleMessage(ctx, m.Chat.ID, m.From.ID, m.ID, displayName(m.From), m.Text); err != nil {
 			log.Printf("pipeline: chat %d: %v", m.Chat.ID, err)
+		}
+	}
+	// Channel-comment capture runs outside the moderation pipeline: it only
+	// observes replies to a bound channel's automatic forwards.
+	if isGroupChat(m.Chat) && m.ReplyToMessage != nil {
+		if err := h.d.Channel.MaybeRecordComment(ctx, m); err != nil {
+			log.Printf("channel comment: chat %d message %d: %v", m.Chat.ID, m.ID, err)
 		}
 	}
 	return nil
@@ -200,12 +228,14 @@ func (h *Handler) handleNewMembers(ctx context.Context, m *models.Message) error
 // the welcome message when verification is disabled.
 func (h *Handler) verifyMember(ctx context.Context, c models.Chat, member *models.User) error {
 	if !h.markRecentJoin(c.ID, member.ID) {
+		log.Printf("join-debug: chat=%d user=%d deduped", c.ID, member.ID)
 		return nil // duplicate join signal (chat_member + service message)
 	}
 	res, err := h.d.Captcha.OnMemberJoined(ctx, c.ID, member.ID, displayName(member))
 	if err != nil {
 		return err
 	}
+	log.Printf("join-debug: chat=%d user=%d captcha enabled=%v pending=%v", c.ID, member.ID, res.Enabled, res.Pending)
 	if !res.Enabled {
 		return h.maybeSendWelcome(ctx, c, member)
 	}
@@ -383,6 +413,8 @@ func (h *Handler) handleCommand(ctx context.Context, m *models.Message, name, ar
 		return h.cmdClean(ctx, m, args)
 	case "welcome":
 		return h.cmdWelcome(ctx, m, args)
+	case "channel":
+		return h.cmdChannel(ctx, m, args)
 	case "roll":
 		return h.cmdRoll(ctx, m)
 	case "pick":
@@ -956,6 +988,69 @@ func (h *Handler) cmdWelcome(ctx context.Context, m *models.Message, args string
 	}
 }
 
+// cmdChannel manages the channel binding (/channel).
+func (h *Handler) cmdChannel(ctx context.Context, m *models.Message, args string) error {
+	if !isGroupChat(m.Chat) {
+		_, err := h.d.Telegram.SendText(ctx, m.Chat.ID, textGroupOnly, nil)
+		return err
+	}
+	args = strings.TrimSpace(args)
+	switch {
+	case args == "":
+		st, err := h.d.Settings.Get(ctx, m.Chat.ID, m.Chat.Title)
+		if err != nil {
+			return err
+		}
+		if !st.Channel.Bound() {
+			_, err = h.d.Telegram.SendText(ctx, m.Chat.ID,
+				textChannelNotBound+"\n\n"+textUsageChannel, nil)
+			return err
+		}
+		previews := textOff
+		if st.Channel.PreviewsEnabled {
+			previews = textOn
+		}
+		_, err = h.d.Telegram.SendText(ctx, m.Chat.ID,
+			fmt.Sprintf(channelStatusT, channelDisplayName(st.Channel.ChannelTitle, st.Channel.ChannelUsername), previews), nil)
+		return err
+	case args == "off":
+		if err := h.d.Channel.Unbind(ctx, m.Chat.ID, m.From.ID); err != nil {
+			if errors.Is(err, application.ErrNotFound) {
+				_, serr := h.d.Telegram.SendText(ctx, m.Chat.ID, textChannelNotBound, nil)
+				return serr
+			}
+			return h.replyError(ctx, m.Chat.ID, err)
+		}
+		_, err := h.d.Telegram.SendText(ctx, m.Chat.ID, textChannelUnbound, nil)
+		return err
+	default:
+		res, err := h.d.Channel.Bind(ctx, m.Chat.ID, m.From.ID, args)
+		if err != nil {
+			return h.replyError(ctx, m.Chat.ID, err)
+		}
+		name := channelDisplayName(res.ChannelTitle, res.ChannelUsername)
+		tpl := channelBoundT
+		if !res.PreviewsEnabled {
+			tpl = channelBoundNoPreviewsT
+		}
+		_, err = h.d.Telegram.SendText(ctx, m.Chat.ID, fmt.Sprintf(tpl, name), nil)
+		return err
+	}
+}
+
+// channelDisplayName renders a channel as "标题 (@username)", falling back
+// to whichever part is known.
+func channelDisplayName(title, username string) string {
+	switch {
+	case title != "" && username != "":
+		return fmt.Sprintf("%s (@%s)", title, username)
+	case username != "":
+		return "@" + username
+	default:
+		return title
+	}
+}
+
 // cmdRoll rolls player-vs-bot d100s (/roll).
 func (h *Handler) cmdRoll(ctx context.Context, m *models.Message) error {
 	you, me := h.d.Fun.Roll(h.rng)
@@ -1009,6 +1104,14 @@ func errorText(err error) string {
 		return textStartPayloadInvalid
 	case errors.Is(err, application.ErrInvalidArgument):
 		return textErrInvalidArgument
+	case errors.Is(err, application.ErrChannelLinkedHere):
+		return textChannelLinkedHere
+	case errors.Is(err, application.ErrChannelNotFound):
+		return textChannelNotFound
+	case errors.Is(err, application.ErrNotAChannel):
+		return textChannelNotAChannel
+	case errors.Is(err, application.ErrBotNotChannelAdmin):
+		return textErrBotNotChannelAdmin
 	default:
 		log.Printf("unhandled application error: %v", err)
 		return textErrUnknown

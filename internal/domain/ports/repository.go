@@ -8,6 +8,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/stvlynn/xqt-bot/internal/domain/channelpost"
 	"github.com/stvlynn/xqt-bot/internal/domain/chat"
 	"github.com/stvlynn/xqt-bot/internal/domain/moderation"
 	"github.com/stvlynn/xqt-bot/internal/domain/schedule"
@@ -55,4 +56,29 @@ type TaskRepository interface {
 	List(ctx context.Context) ([]schedule.Task, error)
 	Save(ctx context.Context, t schedule.Task) error
 	Delete(ctx context.Context, kind schedule.Kind, chatID int64) error
+}
+
+// ChannelBindingRepository maps a channel to the group its posts are
+// forwarded into. A channel forwards to at most one group.
+type ChannelBindingRepository interface {
+	Set(ctx context.Context, channelID, groupID int64) error
+	// GetByChannel returns the bound group, or ports.ErrNotFound.
+	GetByChannel(ctx context.Context, channelID int64) (int64, error)
+	Delete(ctx context.Context, channelID int64) error
+}
+
+// ForwardedPostRepository records which group message mirrors a channel
+// post, so later comments can update that message's buttons.
+type ForwardedPostRepository interface {
+	Save(ctx context.Context, p channelpost.ForwardedPost) error
+	// Get returns the mapping, or ports.ErrNotFound.
+	Get(ctx context.Context, channelID int64, postID int) (*channelpost.ForwardedPost, error)
+}
+
+// CommentLogRepository stores per-post comment previews.
+type CommentLogRepository interface {
+	Append(ctx context.Context, channelID int64, postID int, c channelpost.Comment) error
+	// List returns the recorded previews, oldest first; an unknown post
+	// yields an empty slice (no error).
+	List(ctx context.Context, channelID int64, postID int) ([]channelpost.Comment, error)
 }

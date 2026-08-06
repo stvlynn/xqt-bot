@@ -9,6 +9,7 @@
 - **群聊总结**：接入任意 OpenAI 兼容大模型，`/summary` 一键总结最近 N 小时聊天，也可开启每 N 小时自动总结
 - **定时任务**：按周期自动总结、自动清理长期不发言的僵尸成员
 - **自动表情**：关键词/正则触发 emoji reaction，也可交给大模型自由发挥
+- **频道转发**：`/channel @频道` 绑定后，频道新消息自动转发到群里，消息下方带评论摘要按钮和「去评论区」直达
 - **娱乐**：`/roll` 掷点、`/pick` 帮你做选择、可配置的新成员欢迎语
 
 ## 快速开始（部署你自己的）
@@ -59,6 +60,7 @@ make webhook-setup   # 告诉 Telegram webhook 地址 + 注册命令菜单
 | `/summary [小时]`、`/summary auto 6`、`/summary auto off` | 群聊总结 |
 | `/clean`、`/clean go`、`/clean days 45` | 僵尸成员清理 |
 | `/welcome 文本`、`/welcome off` | 欢迎语，支持 `{name}` `{chat}` |
+| `/channel @频道`、`/channel off` | 绑定频道：新消息自动转发到本群，消息下方带评论按钮（bot 需为频道管理员；把 bot 加进频道讨论群可显示评论摘要） |
 
 ## 远程敏感词库
 

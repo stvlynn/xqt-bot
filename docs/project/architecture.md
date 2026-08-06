@@ -43,8 +43,9 @@ once in `setup()` in `main.go`, which runs on both compile targets.
 | `internal/domain/summary` | recorded message + bounded ring buffer |
 | `internal/domain/schedule` | recurring task model (`auto_summary`, `zombie_clean`, `filter_refresh`) |
 | `internal/domain/invite` | deep-link payload encoding (`j<chatID>`) |
+| `internal/domain/channelpost` | comment previews, bounded comment log, t.me link builders |
 | `internal/domain/ports` | repository + gateway interfaces, `ErrNotFound` |
-| `internal/application` | Captcha, Settings, Moderation, Invite, Reaction, Summary, Zombie, Fun services, `GroupMessagePipeline`, `TaskRunner` |
+| `internal/application` | Captcha, Settings, Moderation, Invite, Reaction, Summary, Zombie, Fun, Channel services, `GroupMessagePipeline`, `TaskRunner` |
 | `internal/infrastructure/kv` | all repositories over a minimal `Store` interface |
 | `internal/infrastructure/telegram` | `ports.TelegramGateway` via `go-telegram/bot` |
 | `internal/infrastructure/llm` | `ports.LLMGateway` via any OpenAI-compatible endpoint |
@@ -65,9 +66,11 @@ once in `setup()` in `main.go`, which runs on both compile targets.
    reported, so Telegram does not retry and storm the worker.
 3. `internal/interfaces/bot/handler.go` routes the update: new-member service
    messages → captcha/welcome flow; callback queries → captcha answer (`c:`)
-   or admin panel (`m:`); commands → one `cmd*` method; ordinary group text →
+   or admin panel (`m:`); channel posts → `ChannelService.HandleChannelPost`;
+   commands → one `cmd*` method; ordinary group text →
    `GroupMessagePipeline` (activity touch → message log → moderation →
-   auto-reaction, skipping reaction when moderation hit).
+   auto-reaction, skipping reaction when moderation hit) followed by
+   `ChannelService.MaybeRecordComment` for replies to channel forwards.
 4. Handlers call application services, which enforce admin checks and
    business rules and talk to the outside world only through `ports`.
 5. Replies go out through `ports.TelegramGateway` (Telegram Bot API) or
@@ -101,6 +104,9 @@ One KV namespace (binding `KV`). All values are JSON. Repositories in
 | `msglog:<chatID>` | `summary.Ring` (≤ 500 messages) | none | oldest evicted when full |
 | `activity:<chatID>` | `map[userID]lastSeen` (user IDs as decimal string keys) | none | capped at 2000 entries, oldest-seen evicted; key deleted when empty |
 | `task:<kind>:<chatID>` | `schedule.Task` (`NextRunAt`, `IntervalHours`) | none | `kind` is `auto_summary`, `zombie_clean` or `filter_refresh` |
+| `chanbind:<channelID>` | bound group ID | none | one channel forwards into at most one group |
+| `chanpost:<channelID>:<postID>` | `channelpost.ForwardedPost` (group message mapping) | 7 days | comment buttons stop updating after expiry |
+| `comments:<channelID>:<postID>` | `channelpost.CommentLog` (≤ 5 previews) | 7 days | oldest evicted when full |
 
 Prefix scans (`ListKeys`) are used only by the cron sweeps (`captcha:`,
 `task:`). Missing keys surface as `ports.ErrNotFound` (Cloudflare KV's
