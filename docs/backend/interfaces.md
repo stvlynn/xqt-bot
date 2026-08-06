@@ -9,9 +9,18 @@ render the reply from `texts.go`.
 
 `Handler.HandleUpdate` routes each `models.Update`:
 
-- **New chat members** → `CaptchaService.OnMemberJoined`; depending on
-  settings, send the captcha (buttons, or image + buttons) or the welcome
-  message. Members in one join event are processed independently.
+- **`chat_member` updates** (primary join signal; requires explicit
+  `allowed_updates` subscription and bot admin rights) → join transitions
+  (`left`/`kicked` → `member`/`restricted`) go to
+  `CaptchaService.OnMemberJoined`; bots and admins are skipped.
+- **New chat members** service messages → the same `verifyMember` flow as a
+  backup signal (service-message delivery is unreliable in large/public
+  groups). Depending on settings, send the captcha (buttons, or image +
+  buttons) or the welcome message. Members in one join event are processed
+  independently.
+- The two join signals for one real join are deduplicated twice: an
+  in-memory 30 s window per (chat, user) in the handler, and the live
+  captcha session itself (`CaptchaResult.Pending`).
 - **Callback queries** → dispatched by data prefix (see below).
 - **Commands** → `parseCommand` lower-cases the name, strips any `@botname`
   suffix, splits args; `commandTarget` ignores commands addressed at other

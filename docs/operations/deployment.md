@@ -32,7 +32,7 @@ make webhook-setup   # 4. register webhook + command menu with Telegram
    `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, and `WORKER_URL`
    (e.g. `https://xqt-bot.<subdomain>.workers.dev`) in the environment. It
    calls `setWebhook` for `<WORKER_URL>/webhook` with the secret token and
-   `allowed_updates: ["message", "callback_query", "my_chat_member"]`,
+   `allowed_updates: ["message", "callback_query", "my_chat_member", "chat_member"]`,
    registers the command menu via `setMyCommands`, and prints
    `getWebhookInfo` for verification.
 
