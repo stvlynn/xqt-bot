@@ -405,6 +405,8 @@ func (h *Handler) handleCommand(ctx context.Context, m *models.Message, name, ar
 		return h.cmdCaptcha(ctx, m, args)
 	case "kick", "ban", "mute", "unmute":
 		return h.cmdModerate(ctx, m, name, args)
+	case "pin", "unpin":
+		return h.cmdPin(ctx, m, name)
 	case "autoreact":
 		return h.cmdAutoReact(ctx, m, args)
 	case "summary":
@@ -719,6 +721,29 @@ func (h *Handler) cmdCaptcha(ctx context.Context, m *models.Message, args string
 		_, err := h.d.Telegram.SendText(ctx, m.Chat.ID, textUsageCaptcha, nil)
 		return err
 	}
+}
+
+// cmdPin pins or unpins the replied-to message (/pin /unpin).
+func (h *Handler) cmdPin(ctx context.Context, m *models.Message, name string) error {
+	if m.ReplyToMessage == nil {
+		_, err := h.d.Telegram.SendText(ctx, m.Chat.ID, textUsagePin, nil)
+		return err
+	}
+	var err error
+	var text string
+	if name == "pin" {
+		err = h.d.Moderation.Pin(ctx, m.Chat.ID, m.From.ID, m.ReplyToMessage.ID)
+		text = textPinDone
+	} else {
+		err = h.d.Moderation.Unpin(ctx, m.Chat.ID, m.From.ID, m.ReplyToMessage.ID)
+		text = textUnpinDone
+	}
+	if err != nil {
+		return h.replyError(ctx, m.Chat.ID, err)
+	}
+	_, err = h.d.Telegram.SendText(ctx, m.Chat.ID, text,
+		&ports.SendOpts{ReplyToMessageID: m.ReplyToMessage.ID})
+	return err
 }
 
 // cmdModerate runs the reply-target commands /kick /ban /mute /unmute.

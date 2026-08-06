@@ -274,6 +274,31 @@ func (g *Gateway) ChatTitle(ctx context.Context, chatID int64) (string, error) {
 	return info.Title, nil
 }
 
+// PinMessage implements ports.TelegramGateway.
+func (g *Gateway) PinMessage(ctx context.Context, chatID int64, messageID int) error {
+	_, err := g.bot.PinChatMessage(ctx, &bot.PinChatMessageParams{
+		ChatID:              chatID,
+		MessageID:           messageID,
+		DisableNotification: true,
+	})
+	if err != nil {
+		return fmt.Errorf("telegram: pin message: %w", err)
+	}
+	return nil
+}
+
+// UnpinMessage implements ports.TelegramGateway.
+func (g *Gateway) UnpinMessage(ctx context.Context, chatID int64, messageID int) error {
+	_, err := g.bot.UnpinChatMessage(ctx, &bot.UnpinChatMessageParams{
+		ChatID:    chatID,
+		MessageID: messageID,
+	})
+	if err != nil {
+		return fmt.Errorf("telegram: unpin message: %w", err)
+	}
+	return nil
+}
+
 // CopyMessage implements ports.TelegramGateway.
 func (g *Gateway) CopyMessage(ctx context.Context, fromChatID, toChatID int64, messageID int, buttons [][]ports.Button) (int, error) {
 	params := &bot.CopyMessageParams{

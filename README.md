@@ -56,6 +56,7 @@ make webhook-setup   # 告诉 Telegram webhook 地址 + 注册命令菜单
 | `/filter import [网址]` `/filter update` | 导入 / 刷新远程敏感词库 |
 | `/captcha on\|off\|button\|image` | 进群验证 |
 | `/kick` `/ban` `/mute 10` `/unmute` | 回复目标消息使用 |
+| `/pin` `/unpin` | 回复消息置顶 / 取消置顶 |
 | `/autoreact 词 表情`、`/autoreact /正则/ 表情`、`/autoreact del 词`、`/autoreact llm on` | 自动表情 |
 | `/summary [小时]`、`/summary auto 6`、`/summary auto off` | 群聊总结 |
 | `/clean`、`/clean go`、`/clean days 45` | 僵尸成员清理 |

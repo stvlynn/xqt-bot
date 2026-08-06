@@ -47,6 +47,7 @@ const (
 /ban — 回复某人的消息：封禁
 /mute 分钟 — 回复某人的消息：禁言（默认 10 分钟）
 /unmute — 回复某人的消息：解除禁言
+/pin — 回复某条消息：置顶；/unpin 取消置顶
 /clean — 预览僵尸成员；/clean go 执行清理；/clean days 天数 设置多久不发言算僵尸
 
 AI 与娱乐
@@ -153,6 +154,9 @@ const (
 const (
 	textUsageReply  = "请回复要处理的成员的消息，再使用这个命令"
 	textUsageMute   = "用法：回复某人的消息后发 /mute 分钟数（默认 10 分钟）"
+	textUsagePin    = "用法：回复要置顶的消息后发 /pin；回复已置顶的消息发 /unpin 可取消置顶"
+	textPinDone     = "📌 已置顶"
+	textUnpinDone   = "已取消置顶"
 	textKickDoneT   = "🦶 已将 %s 移出群聊"
 	textBanDoneT    = "🔨 已封禁 %s"
 	textMuteDoneT   = "🔇 已禁言 %s（%d 分钟）"

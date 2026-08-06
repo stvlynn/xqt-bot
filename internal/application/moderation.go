@@ -357,3 +357,19 @@ func (s *ModerationService) guardTarget(ctx context.Context, chatID, requesterID
 	}
 	return nil
 }
+
+// Pin pins a message in the chat. Admin-only.
+func (s *ModerationService) Pin(ctx context.Context, chatID, requesterID int64, messageID int) error {
+	if err := requireAdmin(ctx, s.tg, chatID, requesterID); err != nil {
+		return err
+	}
+	return s.tg.PinMessage(ctx, chatID, messageID)
+}
+
+// Unpin removes a message from the pinned list. Admin-only.
+func (s *ModerationService) Unpin(ctx context.Context, chatID, requesterID int64, messageID int) error {
+	if err := requireAdmin(ctx, s.tg, chatID, requesterID); err != nil {
+		return err
+	}
+	return s.tg.UnpinMessage(ctx, chatID, messageID)
+}

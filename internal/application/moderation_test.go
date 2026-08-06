@@ -384,3 +384,27 @@ func TestRefreshAllWordListsNoSourcesIsNoop(t *testing.T) {
 		t.Fatalf("want empty result, got %+v", res)
 	}
 }
+
+func TestPinRequiresAdmin(t *testing.T) {
+	repo := newFakeSettingsRepo()
+	repo.seed(chat.Default(-1001, "g"))
+	tg := newFakeTelegram()
+	svc := NewModerationService(repo, newFakeTaskRepo(), tg, nil)
+
+	if err := svc.Pin(context.Background(), -1001, 7, 555); !errors.Is(err, ErrNotAdmin) {
+		t.Fatalf("want ErrNotAdmin, got %v", err)
+	}
+	tg.setAdmin(-1001, 7, true)
+	if err := svc.Pin(context.Background(), -1001, 7, 555); err != nil {
+		t.Fatalf("Pin: %v", err)
+	}
+	if err := svc.Unpin(context.Background(), -1001, 7, 555); err != nil {
+		t.Fatalf("Unpin: %v", err)
+	}
+	if len(tg.pinned) != 1 || tg.pinned[0][1] != 555 {
+		t.Fatalf("pin not recorded: %+v", tg.pinned)
+	}
+	if len(tg.unpinned) != 1 || tg.unpinned[0][1] != 555 {
+		t.Fatalf("unpin not recorded: %+v", tg.unpinned)
+	}
+}

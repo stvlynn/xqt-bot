@@ -280,6 +280,8 @@ type fakeTelegram struct {
 	bans         []ban
 	unbans       [][2]int64
 	inviteCalls  []inviteCall
+	pinned       [][2]int64
+	unpinned     [][2]int64
 	copies       []copyCall
 	buttonEdits  []editButtonsCall
 
@@ -385,6 +387,26 @@ func (f *fakeTelegram) SetReaction(_ context.Context, chatID int64, messageID in
 		return f.err
 	}
 	f.reactions = append(f.reactions, reactionSet{chatID: chatID, messageID: messageID, emoji: emoji})
+	return nil
+}
+
+func (f *fakeTelegram) PinMessage(_ context.Context, chatID int64, messageID int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return f.err
+	}
+	f.pinned = append(f.pinned, [2]int64{chatID, int64(messageID)})
+	return nil
+}
+
+func (f *fakeTelegram) UnpinMessage(_ context.Context, chatID int64, messageID int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return f.err
+	}
+	f.unpinned = append(f.unpinned, [2]int64{chatID, int64(messageID)})
 	return nil
 }
 

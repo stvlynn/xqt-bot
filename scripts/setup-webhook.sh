@@ -39,6 +39,8 @@ curl -fsS -X POST "${API}/setMyCommands" \
       {"command": "ban",       "description": "回复消息使用：封禁该成员"},
       {"command": "mute",      "description": "回复消息使用：禁言，/mute 10 表示 10 分钟"},
       {"command": "unmute",    "description": "回复消息使用：解除禁言"},
+      {"command": "pin",       "description": "回复消息使用：置顶该消息"},
+      {"command": "unpin",     "description": "回复消息使用：取消置顶"},
       {"command": "autoreact", "description": "自动表情：/autoreact 关键词 表情"},
       {"command": "summary",   "description": "生成群聊总结：/summary [小时数]"},
       {"command": "clean",     "description": "清理僵尸成员：/clean 预览，/clean go 执行"},

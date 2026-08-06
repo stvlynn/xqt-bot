@@ -47,6 +47,11 @@ type TelegramGateway interface {
 	// SetReaction attaches an emoji reaction to a message.
 	SetReaction(ctx context.Context, chatID int64, messageID int, emoji string) error
 
+	// PinMessage pins a message without notifying members.
+	PinMessage(ctx context.Context, chatID int64, messageID int) error
+	// UnpinMessage removes a message from the pinned list.
+	UnpinMessage(ctx context.Context, chatID int64, messageID int) error
+
 	// IsAdmin reports whether the user is an administrator of the chat.
 	IsAdmin(ctx context.Context, chatID, userID int64) (bool, error)
 	// BotIsAdmin reports whether the bot itself has admin rights in the chat.
