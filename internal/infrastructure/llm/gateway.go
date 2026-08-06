@@ -20,7 +20,6 @@ import (
 
 // Tuning constants for the chat-completions request.
 const (
-	temperature        = 0.3
 	maxTokens          = 800
 	maxInputRunes      = 12000
 	maxMessageRunes    = 200
@@ -33,29 +32,44 @@ const (
 
 // Gateway implements ports.LLMGateway.
 type Gateway struct {
-	baseURL    string
-	model      string
-	apiKey     string
-	httpClient *http.Client
+	baseURL     string
+	model       string
+	apiKey      string
+	httpClient  *http.Client
+	temperature *float64 // nil = omit from the request entirely
+}
+
+// Option customizes a Gateway.
+type Option func(*Gateway)
+
+// WithTemperature sets an explicit sampling temperature. When unset, the
+// field is omitted from requests, which is required by endpoints that pin
+// their own value.
+func WithTemperature(t float64) Option {
+	return func(g *Gateway) { g.temperature = &t }
 }
 
 // NewGateway creates the client. An empty apiKey yields a gateway with
 // Available() == false whose calls fail fast with a clear error.
-func NewGateway(baseURL, model, apiKey string) *Gateway {
+func NewGateway(baseURL, model, apiKey string, opts ...Option) *Gateway {
 	return NewGatewayWithClient(baseURL, model, apiKey, &http.Client{
 		Timeout: defaultHTTPTimeout,
-	})
+	}, opts...)
 }
 
 // NewGatewayWithClient creates the client with a caller-provided http.Client.
 // The worker entrypoint uses this to inject the Workers-safe fetch transport.
-func NewGatewayWithClient(baseURL, model, apiKey string, client *http.Client) *Gateway {
-	return &Gateway{
+func NewGatewayWithClient(baseURL, model, apiKey string, client *http.Client, opts ...Option) *Gateway {
+	g := &Gateway{
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		model:      model,
 		apiKey:     apiKey,
 		httpClient: client,
 	}
+	for _, opt := range opts {
+		opt(g)
+	}
+	return g
 }
 
 var _ ports.LLMGateway = (*Gateway)(nil)
@@ -72,10 +86,12 @@ type chatMessage struct {
 }
 
 // chatRequest is the OpenAI chat-completions request body.
+// Temperature is a pointer so it can be omitted entirely: some endpoints
+// (e.g. kimi-for-coding) reject any explicit temperature value.
 type chatRequest struct {
 	Model       string        `json:"model"`
 	Messages    []chatMessage `json:"messages"`
-	Temperature float64       `json:"temperature"`
+	Temperature *float64      `json:"temperature,omitempty"`
 	MaxTokens   int           `json:"max_tokens"`
 }
 
@@ -132,7 +148,7 @@ func (g *Gateway) complete(ctx context.Context, messages []chatMessage) (string,
 	body, err := json.Marshal(chatRequest{
 		Model:       g.model,
 		Messages:    messages,
-		Temperature: temperature,
+		Temperature: g.temperature,
 		MaxTokens:   maxTokens,
 	})
 	if err != nil {

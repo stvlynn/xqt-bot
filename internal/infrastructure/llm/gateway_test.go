@@ -29,7 +29,10 @@ func newServer(t *testing.T, status int, content string) *httptest.Server {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Errorf("decode request: %v", err)
 		}
-		if req.Temperature != temperature || req.MaxTokens != maxTokens {
+		if req.Temperature != nil {
+			t.Errorf("temperature must be omitted unless configured, got %v", *req.Temperature)
+		}
+		if req.MaxTokens != maxTokens {
 			t.Errorf("request params wrong: %+v", req)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -147,5 +150,29 @@ func TestFormatMessagesTruncation(t *testing.T) {
 	}
 	if n := len([]rune(formatMessages(many))); n > maxInputRunes {
 		t.Errorf("block not capped: %d runes", n)
+	}
+}
+
+func TestTemperatureOptionSentWhenConfigured(t *testing.T) {
+	var got *float64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req chatRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		got = req.Temperature
+		w.Header().Set("Content-Type", "application/json")
+		resp := chatResponse{}
+		resp.Choices = append(resp.Choices, struct {
+			Message chatMessage `json:"message"`
+		}{Message: chatMessage{Role: "assistant", Content: "ok"}})
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	t.Cleanup(srv.Close)
+
+	g := NewGateway(srv.URL, "m", "k", WithTemperature(0.3))
+	if _, err := g.Summarize(context.Background(), []summary.Message{{UserName: "a", Text: "hi"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || *got != 0.3 {
+		t.Fatalf("expected temperature 0.3 in request, got %v", got)
 	}
 }

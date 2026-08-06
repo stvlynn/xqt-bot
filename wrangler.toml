@@ -23,8 +23,8 @@ preview_id = "e01a6dc9963848a481b454edb21a96d7"
 [vars]
 # Non-secret runtime configuration. Secrets (TELEGRAM_BOT_TOKEN,
 # TELEGRAM_WEBHOOK_SECRET, LLM_API_KEY) are managed via `wrangler secret`.
-LLM_BASE_URL = "https://api.openai.com/v1"
-LLM_MODEL = "gpt-4o-mini"
+LLM_BASE_URL = "https://api.kimi.com/coding/v1"
+LLM_MODEL = "kimi-for-coding"
 ENVIRONMENT = "production"
 BOT_USERNAME = "xqtttbot"
 # Default remote filter word list, imported by a bare "/filter import".

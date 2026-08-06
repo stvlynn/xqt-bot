@@ -30,6 +30,10 @@ type Config struct {
 	// LLMAPIKey authorizes the LLM endpoint (env LLM_API_KEY). When empty,
 	// the LLM gateway reports Available() == false.
 	LLMAPIKey string
+	// LLMTemperature optionally pins the sampling temperature
+	// (env LLM_TEMPERATURE). Empty means the field is omitted from
+	// requests, which endpoints like kimi-for-coding require.
+	LLMTemperature string
 	// FilterListURL is the default remote word list imported by a bare
 	// "/filter import" (env FILTER_LIST_URL, optional).
 	FilterListURL string
@@ -50,15 +54,16 @@ func Load() (*Config, error) {
 // on the host with a fake getter.
 func load(get envGetter) (*Config, error) {
 	cfg := &Config{
-		TelegramToken: get("TELEGRAM_BOT_TOKEN"),
-		WebhookSecret: get("TELEGRAM_WEBHOOK_SECRET"),
-		BotUsername:   get("BOT_USERNAME"),
-		KVBinding:     get("KV_BINDING"),
-		LLMBaseURL:    get("LLM_BASE_URL"),
-		LLMModel:      get("LLM_MODEL"),
-		LLMAPIKey:     get("LLM_API_KEY"),
-		FilterListURL: get("FILTER_LIST_URL"),
-		Environment:   get("ENVIRONMENT"),
+		TelegramToken:  get("TELEGRAM_BOT_TOKEN"),
+		WebhookSecret:  get("TELEGRAM_WEBHOOK_SECRET"),
+		BotUsername:    get("BOT_USERNAME"),
+		KVBinding:      get("KV_BINDING"),
+		LLMBaseURL:     get("LLM_BASE_URL"),
+		LLMModel:       get("LLM_MODEL"),
+		LLMAPIKey:      get("LLM_API_KEY"),
+		LLMTemperature: get("LLM_TEMPERATURE"),
+		FilterListURL:  get("FILTER_LIST_URL"),
+		Environment:    get("ENVIRONMENT"),
 	}
 	if cfg.TelegramToken == "" {
 		return nil, fmt.Errorf("config: TELEGRAM_BOT_TOKEN is required")

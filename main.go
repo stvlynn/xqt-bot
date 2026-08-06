@@ -4,8 +4,10 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"time"
 
 	tgbot "github.com/go-telegram/bot"
@@ -53,7 +55,17 @@ func setup() (http.Handler, *application.TaskRunner, error) {
 	activityRepo := kv.NewActivityRepository(store)
 	taskRepo := kv.NewTaskRepository(store)
 
-	llmGateway := llm.NewGatewayWithClient(cfg.LLMBaseURL, cfg.LLMModel, cfg.LLMAPIKey, httpClient)
+	// LLM options: temperature is only sent when explicitly configured;
+	// endpoints like kimi-for-coding reject any explicit value.
+	var llmOpts []llm.Option
+	if cfg.LLMTemperature != "" {
+		t, err := strconv.ParseFloat(cfg.LLMTemperature, 64)
+		if err != nil {
+			return nil, nil, fmt.Errorf("config: invalid LLM_TEMPERATURE %q: %w", cfg.LLMTemperature, err)
+		}
+		llmOpts = append(llmOpts, llm.WithTemperature(t))
+	}
+	llmGateway := llm.NewGatewayWithClient(cfg.LLMBaseURL, cfg.LLMModel, cfg.LLMAPIKey, httpClient, llmOpts...)
 	renderer, err := image.NewRenderer()
 	if err != nil {
 		return nil, nil, err

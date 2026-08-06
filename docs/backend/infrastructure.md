@@ -58,8 +58,10 @@ endpoint (`LLM_BASE_URL` + `LLM_MODEL` + `LLM_API_KEY`; Cloudflare AI
 Gateway works as a base URL). An empty API key yields `Available() == false`
 and calls fail fast — AI features degrade to "not configured" instead of
 breaking the bot. Requests are tuned by constants at the top of
-`gateway.go` (temperature 0.3, max 800 tokens, 12k-rune input cap, 200-rune
-per-message cap). Both prompts are Chinese and live in this file; summaries
+`gateway.go` (max 800 tokens, 12k-rune input cap, 200-rune per-message
+cap). Temperature is omitted from requests unless `LLM_TEMPERATURE` is set —
+some endpoints (e.g. `kimi-for-coding`) reject any explicit value. Both
+prompts are Chinese and live in this file; summaries
 instruct ≤ 300 chars, reaction picking answers one whitelisted emoji or
 `NONE`.
 
@@ -82,8 +84,8 @@ rule with the URL as its `Source`. The default list shipped in
 
 `config.Load()` reads the runtime config: `TELEGRAM_BOT_TOKEN` (the only
 required value), `TELEGRAM_WEBHOOK_SECRET`, `BOT_USERNAME`, `KV_BINDING`
-(default `KV`), `LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY`, `FILTER_LIST_URL`,
-`ENVIRONMENT`. The
+(default `KV`), `LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY`/`LLM_TEMPERATURE`,
+`FILTER_LIST_URL`, `ENVIRONMENT`. The
 env source is per-platform: `env_js.go` reads Cloudflare bindings/secrets,
 `env_host.go` reads `os.Getenv`. The platform-independent core takes a
 getter function so it is testable on the host.

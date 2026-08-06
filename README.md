@@ -38,7 +38,8 @@ make webhook-setup   # 告诉 Telegram webhook 地址 + 注册命令菜单
 | secret | `TELEGRAM_BOT_TOKEN` | BotFather 颁发的 token |
 | secret | `TELEGRAM_WEBHOOK_SECRET` | 随机字符串，校验 webhook 来源 |
 | secret | `LLM_API_KEY` | OpenAI 兼容 API key（可选，不配置则 AI 功能关闭） |
-| var | `LLM_BASE_URL` / `LLM_MODEL` | 模型端点与型号，默认 OpenAI `gpt-4o-mini`，可指向 Cloudflare AI Gateway |
+| var | `LLM_BASE_URL` / `LLM_MODEL` | 模型端点与型号，当前默认 Kimi for Coding（`https://api.kimi.com/coding/v1` / `kimi-for-coding`），可换成任何 OpenAI 兼容端点 |
+| var | `LLM_TEMPERATURE` | 采样温度（可选）。留空则不发送该字段——kimi-for-coding 等端点要求必须留空 |
 | var | `BOT_USERNAME` | bot 用户名（不含 @），用于生成拉人链接 |
 | var | `FILTER_LIST_URL` | 默认敏感词库地址（可选，配置后群里发 `/filter import` 即可一键导入） |
 
