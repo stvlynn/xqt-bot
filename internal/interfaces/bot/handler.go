@@ -325,6 +325,14 @@ func (h *Handler) cmdStart(ctx context.Context, m *models.Message, payload strin
 		}
 		return err
 	}
+	if res.ChatTitle == "" {
+		buttons := [][]ports.Button{{
+			{Text: inviteJoinButtonNoTitle, URL: res.URL},
+		}}
+		_, err = h.d.Telegram.SendText(ctx, m.Chat.ID,
+			fmt.Sprintf(inviteReadyNoTitleT, res.ExpireMinutes), &ports.SendOpts{Buttons: buttons})
+		return err
+	}
 	buttons := [][]ports.Button{{
 		{Text: fmt.Sprintf(inviteJoinButtonT, res.ChatTitle), URL: res.URL},
 	}}

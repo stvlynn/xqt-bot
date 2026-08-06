@@ -51,4 +51,6 @@ type TelegramGateway interface {
 	IsAdmin(ctx context.Context, chatID, userID int64) (bool, error)
 	// BotIsAdmin reports whether the bot itself has admin rights in the chat.
 	BotIsAdmin(ctx context.Context, chatID int64) (bool, error)
+	// ChatTitle returns the chat's display title (empty for private chats).
+	ChatTitle(ctx context.Context, chatID int64) (string, error)
 }

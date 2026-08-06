@@ -50,6 +50,16 @@ func (s *InviteService) HandleStart(ctx context.Context, userID int64, payload s
 	if err != nil {
 		return nil, err
 	}
+	// The stored title can be empty (settings materialize on first sight,
+	// which may predate any titled update). Backfill it from Telegram so the
+	// invite copy can name the group. The backfill is cosmetic: failures
+	// fall through to the generic copy instead of blocking the invite.
+	if st.Title == "" {
+		if title, terr := s.tg.ChatTitle(ctx, chatID); terr == nil && title != "" {
+			st.Title = title
+			_ = s.settings.Save(ctx, st)
+		}
+	}
 	expireAt := s.now().Add(time.Duration(st.Invite.ExpireMinutes) * time.Minute)
 	url, err := s.tg.CreateInviteLink(ctx, chatID, expireAt, inviteMemberLimit)
 	if err != nil {

@@ -261,3 +261,12 @@ func (g *Gateway) BotIsAdmin(ctx context.Context, chatID int64) (bool, error) {
 func isAdminStatus(t models.ChatMemberType) bool {
 	return t == models.ChatMemberTypeOwner || t == models.ChatMemberTypeAdministrator
 }
+
+// ChatTitle implements ports.TelegramGateway.
+func (g *Gateway) ChatTitle(ctx context.Context, chatID int64) (string, error) {
+	info, err := g.bot.GetChat(ctx, &bot.GetChatParams{ChatID: chatID})
+	if err != nil {
+		return "", fmt.Errorf("telegram: get chat %d: %w", chatID, err)
+	}
+	return info.Title, nil
+}

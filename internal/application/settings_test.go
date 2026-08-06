@@ -97,3 +97,24 @@ func TestSettingsSettersPersist(t *testing.T) {
 		t.Fatalf("unexpected settings: %+v", st)
 	}
 }
+
+func TestSettingsGetBackfillsAndPersistsTitle(t *testing.T) {
+	repo := newFakeSettingsRepo()
+	repo.seed(chat.Default(-100888, ""))
+	svc := NewSettingsService(repo, newFakeTelegram())
+
+	st, err := svc.Get(context.Background(), -100888, "产品讨论组")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Title != "产品讨论组" {
+		t.Fatalf("want backfilled title, got %q", st.Title)
+	}
+	again, err := svc.Get(context.Background(), -100888, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Title != "产品讨论组" {
+		t.Fatalf("title not persisted: %q", again.Title)
+	}
+}

@@ -78,3 +78,29 @@ func TestInviteCreateShareLinkRequiresAdmin(t *testing.T) {
 		t.Fatalf("want %q, got %q", want, link)
 	}
 }
+
+func TestInviteHandleStartBackfillsTitleFromTelegram(t *testing.T) {
+	repo := newFakeSettingsRepo()
+	tg := newFakeTelegram()
+	tg.chatTitle = "后端技术交流"
+	svc := NewInviteService(repo, tg, "xqt_bot")
+	svc.now = fixedClock
+
+	// Stored settings with an empty title, as materialized on first sight.
+	repo.seed(chat.Default(-100777, ""))
+
+	res, err := svc.HandleStart(context.Background(), 42, "j-100777")
+	if err != nil {
+		t.Fatalf("HandleStart: %v", err)
+	}
+	if res.ChatTitle != "后端技术交流" {
+		t.Fatalf("want backfilled title, got %q", res.ChatTitle)
+	}
+	stored, err := repo.Get(context.Background(), -100777)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Title != "后端技术交流" {
+		t.Fatalf("title not persisted: %q", stored.Title)
+	}
+}

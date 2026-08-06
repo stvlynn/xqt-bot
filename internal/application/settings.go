@@ -25,14 +25,18 @@ func NewSettingsService(settings ports.SettingsRepository, tg ports.TelegramGate
 }
 
 // Get returns the chat's settings, or defaults (titled with the given name)
-// when the chat has never been persisted.
+// when the chat has never been persisted. A previously stored empty title is
+// backfilled (and persisted) from the caller-known title.
 func (s *SettingsService) Get(ctx context.Context, chatID int64, title string) (*chat.Settings, error) {
 	st, err := loadSettings(ctx, s.settings, chatID)
 	if err != nil {
 		return nil, err
 	}
-	if st.Title == "" {
+	if st.Title == "" && title != "" {
 		st.Title = title
+		if err := s.settings.Save(ctx, st); err != nil {
+			return nil, err
+		}
 	}
 	return st, nil
 }

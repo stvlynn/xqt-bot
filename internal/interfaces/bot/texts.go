@@ -54,8 +54,13 @@ const (
 	// inviteReadyT is the private-chat reply after a deep link resolves:
 	// chat title, validity minutes.
 	inviteReadyT = "点击下方按钮加入「%s」：\n链接只能用一次，%d 分钟内有效。"
+	// inviteReadyNoTitleT is inviteReadyT for chats whose title could not be
+	// resolved: validity minutes.
+	inviteReadyNoTitleT = "点击下方按钮加入群聊：\n链接只能用一次，%d 分钟内有效。"
 	// inviteJoinButtonT is the URL-button label: chat title.
 	inviteJoinButtonT = "加入「%s」"
+	// inviteJoinButtonNoTitle is the button label without a resolved title.
+	inviteJoinButtonNoTitle = "加入群聊"
 	// inviteShareT is the group reply to /invite: share link, validity minutes.
 	inviteShareT = "🔗 邀请链接已生成：\n%s\n\n转发给想邀请的人，对方点开会私聊我领取一次性入群链接（%d 分钟内有效）。"
 )

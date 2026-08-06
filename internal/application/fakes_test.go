@@ -266,7 +266,8 @@ type fakeTelegram struct {
 	inviteCalls  []inviteCall
 
 	inviteURL string
-	err       error // injected failure for all mutating calls
+	chatTitle string // returned by ChatTitle
+	err       error  // injected failure for all mutating calls
 }
 
 func newFakeTelegram() *fakeTelegram {
@@ -372,6 +373,12 @@ func (f *fakeTelegram) IsAdmin(_ context.Context, chatID, userID int64) (bool, e
 
 func (f *fakeTelegram) BotIsAdmin(_ context.Context, _ int64) (bool, error) {
 	return true, nil
+}
+
+func (f *fakeTelegram) ChatTitle(_ context.Context, _ int64) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.chatTitle, nil
 }
 
 // --- LLMGateway ---
